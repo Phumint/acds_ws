@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'lane_detection_node = acds_perception.lane_detection_node:main',
         ],
     },
 )
