@@ -24,6 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'motor_driver_node = acds_actuation.motor_driver_node:main',
+            'steering_driver_node = acds_actuation.steering_driver_node:main',
         ],
     },
 )

@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'controller_node = acds_control.controller_node:main',
         ],
     },
 )

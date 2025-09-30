@@ -12,7 +12,8 @@ class LaneDetectionNode(Node):
     """
     def __init__(self):
         super().__init__('lane_detection_node')
-        self.publisher_ = self.create_publisher(Float32, 'lane_offset', 10)
+        self.pub_offset = self.create_publisher(Float32, 'lane_offset', 10)
+        self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
 
         # Camera setup
         self.cap = cv2.VideoCapture(0)
@@ -129,11 +130,16 @@ class LaneDetectionNode(Node):
         if frame is None:
             return
 
-        offset, heading, conf, _ = self.detect_lane_frame(frame)
+        offset, heading, _ = self.detect_lane_frame(frame)
 
-        msg = Float32()
-        msg.data = offset
-        self.publisher_.publish(msg)
+        msg_offset = Float32()
+        msg_offset.data = offset
+        self.pub_offset.publish(msg_offset)
+
+        msg_heading = Float32()
+        msg_heading.data = heading
+        self.pub_heading.publish(msg_heading)
+
         self.get_logger().info(f"Lane offset: {offset:.3f}, Heading: {heading:.3f}")
 
 def main(args=None):
