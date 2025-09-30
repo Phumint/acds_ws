@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/acds.launch.py']),
+        ('share/' + package_name + '/acds_launch', ['acds_launch/acds.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

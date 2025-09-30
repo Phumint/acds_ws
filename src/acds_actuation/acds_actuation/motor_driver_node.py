@@ -60,3 +60,6 @@ def main(args=None):
         motor_driver_node.pi.write(R_EN, 0)
         motor_driver_node.pi.write(L_EN, 0)
         motor_driver_node.pi.stop()
+
+if __name__ == '__main__':
+    main()

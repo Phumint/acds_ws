@@ -84,7 +84,7 @@ class LaneDetectionNode(Node):
         pixel_offset = lane_center - (width / 2)
         offset_norm = pixel_offset / (width / 2)
 
-        return float(offset_norm), float(heading_rad), 1.0, frame
+        return float(offset_norm), float(heading_rad), frame
 
     def sliding_window_lane(self, mask):
         """Sliding window lane detection"""

@@ -11,7 +11,7 @@ MAX_WHEEL_ANGLE = 20.0  # degrees
 
 class SteeringDriverNode(Node):
     def __init__(self):
-        super.__init__('steering_driver_node')
+        super().__init__('steering_driver_node')
         self.subscription_angle = self.create_subscription(Float32, 'steering_angle', self.angle_callback, 10)
         
         self.pi = pigpio.pi()
@@ -38,3 +38,6 @@ def main(args=None):
         rclpy.shutdown()
         steering_driver_node.pi.set_servo_pulsewidth(SERVO_PIN, 0)
         steering_driver_node.pi.stop()
+
+if __name__ == '__main__':
+    main()
