@@ -1,0 +1,1471 @@
+.
+├── codebase.txt
+├── create_codebase.sh
+├── .gitignore
+└── src
+    ├── acds_actuation
+    │   ├── acds_actuation
+    │   │   ├── __init__.py
+    │   │   ├── motor_driver_node.py
+    │   │   └── steering_driver_node.py
+    │   ├── package.xml
+    │   ├── resource
+    │   │   └── acds_actuation
+    │   ├── setup.cfg
+    │   ├── setup.py
+    │   └── test
+    │       ├── test_copyright.py
+    │       ├── test_flake8.py
+    │       └── test_pep257.py
+    ├── acds_control
+    │   ├── acds_control
+    │   │   ├── controller_node.py
+    │   │   ├── __init__.py
+    │   │   └── pid.py
+    │   ├── package.xml
+    │   ├── resource
+    │   │   └── acds_control
+    │   ├── setup.cfg
+    │   ├── setup.py
+    │   └── test
+    │       ├── test_copyright.py
+    │       ├── test_flake8.py
+    │       └── test_pep257.py
+    ├── acds_description
+    │   ├── acds_description
+    │   │   └── __init__.py
+    │   ├── package.xml
+    │   ├── resource
+    │   │   └── acds_description
+    │   ├── setup.cfg
+    │   ├── setup.py
+    │   └── test
+    │       ├── test_copyright.py
+    │       ├── test_flake8.py
+    │       └── test_pep257.py
+    ├── acds_launch
+    │   ├── acds_launch
+    │   │   ├── acds.launch.py
+    │   │   └── __init__.py
+    │   ├── package.xml
+    │   ├── resource
+    │   │   └── acds_launch
+    │   ├── setup.cfg
+    │   ├── setup.py
+    │   └── test
+    │       ├── test_copyright.py
+    │       ├── test_flake8.py
+    │       └── test_pep257.py
+    ├── acds_perception
+    │   ├── acds_perception
+    │   │   ├── __init__.py
+    │   │   └── lane_detection_node.py
+    │   ├── package.xml
+    │   ├── resource
+    │   │   └── acds_perception
+    │   ├── setup.cfg
+    │   ├── setup.py
+    │   └── test
+    │       ├── test_copyright.py
+    │       ├── test_flake8.py
+    │       └── test_pep257.py
+    └── acds_simulation
+        ├── acds_simulation
+        │   └── __init__.py
+        ├── package.xml
+        ├── resource
+        │   └── acds_simulation
+        ├── setup.cfg
+        ├── setup.py
+        └── test
+            ├── test_copyright.py
+            ├── test_flake8.py
+            └── test_pep257.py
+
+25 directories, 57 files
+
+==========================================
+
+--- File: ./src/acds_perception/resource/acds_perception ---
+
+--- File: ./src/acds_perception/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_perception/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_perception/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_perception/acds_perception/__init__.py ---
+
+--- File: ./src/acds_perception/acds_perception/lane_detection_node.py ---
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+import cv2
+import numpy as np
+import threading
+
+class LaneDetectionNode(Node):
+    """
+    Real-time ROS2 lane detection with threaded camera capture and sliding window.
+    Publishes lane offset (normalized) to 'lane_offset'.
+    """
+    def __init__(self):
+        super().__init__('lane_detection_node')
+        self.pub_offset = self.create_publisher(Float32, 'lane_offset', 10)
+        self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
+
+        # Camera setup
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            self.get_logger().warning("Camera not opened (index 0). Node still running.")
+        self.latest_frame = None
+        self.lock = threading.Lock()
+
+        # Start camera capture thread
+        threading.Thread(target=self._capture_frames, daemon=True).start()
+
+        # Timer for lane detection loop (20 Hz)
+        self.timer = self.create_timer(0.05, self.timer_callback)
+
+    def _capture_frames(self):
+        """Continuously read frames from the camera in a separate thread."""
+        while True:
+            ret, frame = self.cap.read()
+            if ret:
+                with self.lock:
+                    self.latest_frame = frame
+
+    def detect_lane_frame(self, frame):
+        """Sliding window lane detection algorithm."""
+        height, width = frame.shape[:2]
+
+        # Region of interest
+        roi_points = np.array([[
+            (0, height-50),
+            (width, height-50),
+            (width, int(height*0.5)),
+            (0, int(height*0.5))
+        ]], dtype=np.int32)
+
+        # Perspective transform
+        pts1 = np.float32([roi_points[0][3], roi_points[0][0],
+                           roi_points[0][2], roi_points[0][1]])  # tl, bl, tr, br
+        pts2 = np.float32([[0,0],[0,height],[width,0],[width,height]])
+        matrix = cv2.getPerspectiveTransform(pts1, pts2)
+        warped = cv2.warpPerspective(frame, matrix, (width, height))
+
+        # HSV threshold for blue lanes
+        hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
+        lower_blue = np.array([86, 40, 0])
+        upper_blue = np.array([150, 255, 255])
+        mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+        # Sliding window detection
+        lx, rx = self.sliding_window_lane(mask)
+        if len(lx) == 0 or len(rx) == 0:
+            return 0.0, 0.0, 0.0, frame
+
+        # Polynomial fit
+        left_fit = np.polyfit(np.arange(len(lx)), lx, 2) if len(lx) > 2 else None
+        right_fit = np.polyfit(np.arange(len(rx)), rx, 2) if len(rx) > 2 else None
+
+        # Lane heading calculation
+        y_eval = height * 0.9
+        heading_rad = 0.0
+        if left_fit is not None and right_fit is not None:
+            left_slope = 2*left_fit[0]*y_eval + left_fit[1]
+            right_slope = 2*right_fit[0]*y_eval + right_fit[1]
+            lane_slope = (left_slope + right_slope) / 2.0
+            heading_rad = float(np.arctan(lane_slope))
+
+        # Lateral offset
+        lane_center = (np.mean(lx) + np.mean(rx)) / 2
+        pixel_offset = lane_center - (width / 2)
+        offset_norm = pixel_offset / (width / 2)
+
+        return float(offset_norm), float(heading_rad), frame
+
+    def sliding_window_lane(self, mask):
+        """Sliding window lane detection"""
+        histogram = np.sum(mask[mask.shape[0]//2:, :], axis=0)
+        midpoint = histogram.shape[0] // 2
+        left_base = np.argmax(histogram[:midpoint])
+        right_base = np.argmax(histogram[midpoint:]) + midpoint
+
+        n_windows = 12
+        window_height = mask.shape[0] // n_windows
+        nonzero = mask.nonzero()
+        nonzeroy, nonzerox = np.array(nonzero[0]), np.array(nonzero[1])
+
+        margin, minpix = 50, 50
+        lx, rx = [], []
+        l_current, r_current = left_base, right_base
+
+        for window in range(n_windows):
+            win_y_low = mask.shape[0] - (window + 1) * window_height
+            win_y_high = mask.shape[0] - window * window_height
+            win_xleft_low, win_xleft_high = l_current - margin, l_current + margin
+            win_xright_low, win_xright_high = r_current - margin, r_current + margin
+
+            good_left = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
+                         (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+            good_right = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
+                          (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+
+            if len(good_left) > minpix:
+                l_current = int(np.mean(nonzerox[good_left]))
+            if len(good_right) > minpix:
+                r_current = int(np.mean(nonzerox[good_right]))
+
+            lx.extend(nonzerox[good_left])
+            rx.extend(nonzerox[good_right])
+
+        return np.array(lx), np.array(rx)
+
+    def timer_callback(self):
+        """Process latest frame and publish lane offset"""
+        with self.lock:
+            frame = self.latest_frame
+        if frame is None:
+            return
+
+        offset, heading, _ = self.detect_lane_frame(frame)
+
+        msg_offset = Float32()
+        msg_offset.data = offset
+        self.pub_offset.publish(msg_offset)
+
+        msg_heading = Float32()
+        msg_heading.data = heading
+        self.pub_heading.publish(msg_heading)
+
+        self.get_logger().info(f"Lane offset: {offset:.3f}, Heading: {heading:.3f}")
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = LaneDetectionNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            if node.cap and node.cap.isOpened():
+                node.cap.release()
+        except Exception:
+            pass
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+
+--- File: ./src/acds_perception/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_perception</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>cv_bridge</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_perception/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_perception
+[install]
+install_scripts=$base/lib/acds_perception
+
+--- File: ./src/acds_perception/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_perception'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'lane_detection_node = acds_perception.lane_detection_node:main',
+        ],
+    },
+)
+
+--- File: ./src/acds_simulation/resource/acds_simulation ---
+
+--- File: ./src/acds_simulation/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_simulation/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_simulation/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_simulation/acds_simulation/__init__.py ---
+
+--- File: ./src/acds_simulation/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_simulation</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>launch</depend>
+  <depend>gazebo_ros</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_simulation/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_simulation
+[install]
+install_scripts=$base/lib/acds_simulation
+
+--- File: ./src/acds_simulation/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_simulation'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+        ],
+    },
+)
+
+--- File: ./src/acds_launch/resource/acds_launch ---
+
+--- File: ./src/acds_launch/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_launch/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_launch/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_launch/acds_launch/__init__.py ---
+
+--- File: ./src/acds_launch/acds_launch/acds.launch.py ---
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    return LaunchDescription([
+        Node(
+            package='acds_perception',
+            executable='lane_detection_node',
+            name='lane_detection_node',
+            output='screen'
+        ),
+        Node(
+            package='acds_control',
+            executable='controller_node',
+            name='controller_node',
+            output='screen'
+        ),
+        Node(
+            package='acds_actuation',
+            executable='motor_driver_node',
+            name='motor_driver_node',
+            output='screen'
+        ),
+        Node(
+            package='acds_actuation',
+            executable='steering_driver_node',
+            name='steering_driver_node',
+            output='screen'
+        ),
+    ])
+
+--- File: ./src/acds_launch/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_launch</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>rclpy</depend>
+  <depend>launch</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_launch/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_launch
+[install]
+install_scripts=$base/lib/acds_launch
+
+--- File: ./src/acds_launch/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_launch'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/acds_launch', ['acds_launch/acds.launch.py']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+        ],
+    },
+)
+
+--- File: ./src/acds_description/resource/acds_description ---
+
+--- File: ./src/acds_description/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_description/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_description/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_description/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_description</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>xacro</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_description/acds_description/__init__.py ---
+
+--- File: ./src/acds_description/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_description
+[install]
+install_scripts=$base/lib/acds_description
+
+--- File: ./src/acds_description/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_description'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+        ],
+    },
+)
+
+--- File: ./src/acds_control/resource/acds_control ---
+
+--- File: ./src/acds_control/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_control/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_control/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_control/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_control</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_control/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_control
+[install]
+install_scripts=$base/lib/acds_control
+
+--- File: ./src/acds_control/acds_control/controller_node.py ---
+import rclpy
+import math
+from rclpy.node import Node
+from std_msgs.msg import Float32
+from acds_control.pid import PID
+
+class ControllerNode(Node):
+    """
+    subscribes to lane_offset and publishes steering_angle and motor_speed   
+    """
+
+    def __init__(self):
+        super().__init__('controller_node')
+        self.lane_offset_value = 0.0
+        self.lane_heading_value = 0.0
+
+        # Subscriptions
+        self.lane_offset = self.create_subscription(Float32, 'lane_offset', self.offset_callback, 10)
+        self.lane_heading = self.create_subscription(Float32, 'lane_heading', self.heading_callback, 10)
+        
+        # Publishers
+        self.pub_steer = self.create_publisher(Float32, 'steering_angle', 10)
+        self.pub_speed = self.create_publisher(Float32, 'motor_speed', 10)
+
+        # PID TUNING
+        self.pid = PID(Kp=6.0, Ki=0.0, Kd=0.2, output_limits=(-20, 20))  # TUNE THESE GANGIES
+
+        self.base_speed = 1.0 # 100% duty max, max speed
+
+        # Timer Loop
+        self.timer = self.create_timer(0.1, self.control_loop) # 10 Hz
+
+    def offset_callback(self, msg: Float32):
+        self.lane_offset_value = msg.data
+        # self.get_logger().info(f"Lane offset: {self.lane_offset}")        
+
+    def heading_callback(self, msg: Float32):
+        self.lane_heading_value = msg.data
+        # self.get_logger().info(f"Lane heading: {self.lane_heading}")
+
+    def control_loop(self):
+        composite = float((20* self.lane_offset_value *0.8) + (20* self.lane_heading_value *0.2))
+        steer_angle = -float(self.pid.update(composite))
+        
+        speed_proportion = 0.3 # proportion of speed reduction at max steering
+        speed = self.base_speed * (1 - min(abs(steer_angle)/20, 1)*speed_proportion) # reduce speed when steering
+
+        # Publish the speed and steer commands
+        self.pub_speed.publish(Float32(data=speed))
+        self.pub_steer.publish(Float32(data=steer_angle))
+
+def main(args=None):
+    rclpy.init(args=args)
+    controller_node = ControllerNode()
+    
+    try:
+        rclpy.spin(controller_node)
+    
+    except KeyboardInterrupt:
+        pass
+    finally:
+        controller_node.destroy_node()
+        rclpy.shutdown()
+    
+if __name__ == '__main__':
+    main()
+
+--- File: ./src/acds_control/acds_control/__init__.py ---
+
+--- File: ./src/acds_control/acds_control/pid.py ---
+import time
+
+class PID:
+    def __init__(self, Kp, Ki, Kd, output_limits=(None, None)):
+        self.Kp, self.Ki, self.Kd = Kp, Ki, Kd
+        self.min_out, self.max_out = output_limits
+        self.last_error = 0.0
+        self.integral = 0.0
+        self.last_time = None
+
+    def update(self, error, dt=None):
+        now = time.time()
+        if dt is None:
+            dt = now - self.last_time if self.last_time else 0.0
+        self.last_time = now
+
+        self.integral += error * dt
+        derivative = (error - self.last_error) / dt if dt > 0 else 0.0 
+        output = self.Kp*error + self.Ki*self.integral + self.Kd*derivative
+
+        if self.min_out is not None:
+            output = max(self.min_out, output)
+        if self.max_out is not None:
+            output = min(self.max_out, output)
+        
+        self.last_error = error
+        return output
+--- File: ./src/acds_control/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_control'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'controller_node = acds_control.controller_node:main',
+        ],
+    },
+)
+
+--- File: ./src/acds_actuation/resource/acds_actuation ---
+
+--- File: ./src/acds_actuation/test/test_flake8.py ---
+# Copyright 2017 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_flake8.main import main_with_errors
+import pytest
+
+
+@pytest.mark.flake8
+@pytest.mark.linter
+def test_flake8():
+    rc, errors = main_with_errors(argv=[])
+    assert rc == 0, \
+        'Found %d code style errors / warnings:\n' % len(errors) + \
+        '\n'.join(errors)
+
+--- File: ./src/acds_actuation/test/test_pep257.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_pep257.main import main
+import pytest
+
+
+@pytest.mark.linter
+@pytest.mark.pep257
+def test_pep257():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found code style errors / warnings'
+
+--- File: ./src/acds_actuation/test/test_copyright.py ---
+# Copyright 2015 Open Source Robotics Foundation, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ament_copyright.main import main
+import pytest
+
+
+# Remove the `skip` decorator once the source file(s) have a copyright header
+@pytest.mark.skip(reason='No copyright header has been placed in the generated source file.')
+@pytest.mark.copyright
+@pytest.mark.linter
+def test_copyright():
+    rc = main(argv=['.', 'test'])
+    assert rc == 0, 'Found errors'
+
+--- File: ./src/acds_actuation/package.xml ---
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>acds_actuation</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
+  <license>TODO: License declaration</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+
+--- File: ./src/acds_actuation/setup.cfg ---
+[develop]
+script_dir=$base/lib/acds_actuation
+[install]
+install_scripts=$base/lib/acds_actuation
+
+--- File: ./src/acds_actuation/acds_actuation/__init__.py ---
+
+--- File: ./src/acds_actuation/acds_actuation/motor_driver_node.py ---
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+import pigpio
+
+class MotorDriverNode(Node):
+    def __init__(self):
+        super().__init__('motor_driver_node')
+        self.RPWM = 13
+        self.LPWM = 12
+        self.R_EN, self.L_EN = 6, 5
+        self.PWM_FREQ = 1000  # Hz
+
+        self.subscription_speed = self.create_subscription(Float32, 'motor_speed', self.speed_callback, 10)
+
+        self.pi = pigpio.pi()
+        self.pi.set_mode(self.RPWM, pigpio.OUTPUT)
+        self.pi.set_mode(self.LPWM, pigpio.OUTPUT)
+        
+        self.pi.set_mode(self.R_EN, pigpio.OUTPUT)
+        self.pi.set_mode(self.L_EN, pigpio.OUTPUT)
+
+        self.pi.write(self.R_EN, 1)
+        self.pi.write(self.L_EN, 1)
+
+        self.pi.set_PWM_frequency(self.RPWM, self.PWM_FREQ)
+        self.pi.set_PWM_frequency(self.LPWM, self.PWM_FREQ)
+
+        self.get_logger().info("Motor driver node initialized.")
+
+    def speed_callback(self, speed: Float32): 
+        duty = int(abs(speed.data * 1000000))
+        duty = min(max(duty, 0), 1000000)  # Clamp between 0 and 1,000,000
+
+        if speed.data > 0:
+            self.pi.hardware_PWM(self.RPWM, self.PWM_FREQ, duty) 
+            self.pi.hardware_PWM(self.LPWM, self.PWM_FREQ, 0) 
+        elif speed.data < 0:
+            self.pi.hardware_PWM(self.LPWM, self.PWM_FREQ, duty) 
+            self.pi.hardware_PWM(self.RPWM, self.PWM_FREQ, 0) 
+        else:
+            self.pi.hardware_PWM(self.LPWM, 0, 0)
+            self.pi.hardware_PWM(self.RPWM, 0, 0)
+        # self.get_logger().info(f"Set right motor speed to {duty*100:.1f}%")
+
+    def cleanup(self):
+        self.get_logger().info("Cleaning up GPIO...")
+        # Stop motor/servo outputs
+        if hasattr(self, "pi"):  
+            try:
+                # If it's a motor node:
+                self.pi.hardware_PWM(self.RPWM, 0, 0)
+                self.pi.hardware_PWM(self.LPWM, 0, 0)
+                self.pi.write(self.R_EN, 0)
+                self.pi.write(self.L_EN, 0)
+
+                # If it's a steering node with a servo:
+                # self.pi.set_servo_pulsewidth(self.servo_pin, 0)
+
+                self.pi.stop()
+            except Exception as e:
+                self.get_logger().warn(f"Error during cleanup: {e}")
+
+    def destroy_node(self):
+        self.cleanup()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    motor_driver_node = MotorDriverNode()
+    
+    try:
+        rclpy.spin(motor_driver_node)
+    
+    except KeyboardInterrupt:
+        pass
+    finally:
+        motor_driver_node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+--- File: ./src/acds_actuation/acds_actuation/steering_driver_node.py ---
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+import pigpio
+
+class SteeringDriverNode(Node):
+    def __init__(self):
+        super().__init__('steering_driver_node')
+        # Define GPIO pin for servo
+        self.SERVO_PIN = 18
+        self.NEUTRAL_US = 1500
+        self.MIN_US = 1000
+        self.MAX_US = 2000
+        self.MAX_WHEEL_ANGLE = 20.0  # degrees
+
+        self.subscription_angle = self.create_subscription(Float32, 'steering_angle', self.angle_callback, 10)
+        
+        self.pi = pigpio.pi()
+        self.pi.set_mode(self.SERVO_PIN, pigpio.OUTPUT)
+        self.pi.set_servo_pulsewidth(self.SERVO_PIN, self.NEUTRAL_US)
+
+    def angle_callback(self, angle_deg: Float32):
+        angle_deg = max(-self.MAX_WHEEL_ANGLE, min(self.MAX_WHEEL_ANGLE, angle_deg.data))
+        pulse = self.NEUTRAL_US + (angle_deg/self.MAX_WHEEL_ANGLE) * (self.MAX_US - self.NEUTRAL_US)
+
+        self.pi.set_servo_pulsewidth(self.SERVO_PIN, pulse)
+
+    def cleanup(self):
+        self.get_logger().info("Cleaning up GPIO...")
+        # Stop motor/servo outputs
+        if hasattr(self, "pi"):  
+            try:
+                # If it's a motor node:
+                # self.pi.hardware_PWM(self.RPWM, 0, 0)
+                # self.pi.hardware_PWM(self.LPWM, 0, 0)
+                # self.pi.write(self.R_EN, 0)
+                # self.pi.write(self.L_EN, 0)
+
+                # If it's a steering node with a servo:
+                self.pi.set_servo_pulsewidth(self.SERVO_PIN, 0)
+
+                self.pi.stop()
+            except Exception as e:
+                self.get_logger().warn(f"Error during cleanup: {e}")
+
+    def destroy_node(self):
+        self.cleanup()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    steering_driver_node = SteeringDriverNode()
+    
+    try:
+        rclpy.spin(steering_driver_node)
+    
+    except KeyboardInterrupt:
+        pass
+    finally:
+        steering_driver_node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+--- File: ./src/acds_actuation/setup.py ---
+from setuptools import find_packages, setup
+
+package_name = 'acds_actuation'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='rppi4',
+    maintainer_email='phumint1969@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'motor_driver_node = acds_actuation.motor_driver_node:main',
+            'steering_driver_node = acds_actuation.steering_driver_node:main',
+        ],
+    },
+)
+
+--- File: ./.gitignore ---
+build/
+install/
+log/
+.vscode/
+--- File: ./create_codebase.sh ---
+#!/bin/bash
+
+# A script to convert a codebase into a single text file with hierarchy,
+# ignoring specified files and directories.
+
+# Set the output file name
+OUTPUT_FILE="codebase.txt"
+
+# Set the root directory of your codebase
+# By default, it uses the current directory where the script is run
+CODE_ROOT_DIR="."
+
+# Define the files and directories to ignore 🚫
+# IMPORTANT: Directories MUST end with a trailing slash to be correctly ignored.
+# This tells the script's logic to use the efficient -prune option.
+EXCLUDE_LIST=(
+    ".git/"
+    "node_modules/"
+    "__pycache__/"
+    "dist/"
+    "*.log"
+    "*.pyc"
+    "*.avi"
+    "build/"
+    "install/"
+    "log"
+    "README.md"
+)
+
+# Clear the output file if it exists
+> "$OUTPUT_FILE"
+
+echo "Generating codebase hierarchy..."
+# Convert the bash array to a format 'tree' understands: 'pattern1|pattern2|...'
+EXCLUDE_STRING=$(printf "%s|" "${EXCLUDE_LIST[@]}")
+EXCLUDE_STRING=${EXCLUDE_STRING%?} # Remove the last pipe character
+
+# Use 'tree' with the -I option to exclude directories and files
+tree -a -I "$EXCLUDE_STRING" "$CODE_ROOT_DIR" >> "$OUTPUT_FILE"
+
+echo "" >> "$OUTPUT_FILE"
+echo "==========================================" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+echo "Concatenating file contents..."
+
+# Build the find command dynamically to apply exclusions correctly
+FIND_CMD="find \"$CODE_ROOT_DIR\""
+
+# Add the exclusion logic for each item
+for item in "${EXCLUDE_LIST[@]}"; do
+    if [[ "$item" == */ ]]; then
+        # This is a directory, use -prune to skip it and its contents
+        FIND_CMD+=" -path \"$CODE_ROOT_DIR/${item%?}\" -prune -o"
+    else
+        # This is a file, use ! -name to exclude it
+        FIND_CMD+=" -name \"$item\" -prune -o"
+    fi
+done
+
+# Add the final -type f to select only files that haven't been pruned
+FIND_CMD+=" -type f -print0"
+
+# Use eval to execute the dynamically built find command, and pipe to while loop
+eval "$FIND_CMD" | while IFS= read -r -d $'\0' file; do
+    echo "--- File: $file ---" >> "$OUTPUT_FILE"
+    cat "$file" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE" # Add a newline for separation
+done
+
+echo "Done! Codebase has been exported to $OUTPUT_FILE"
+--- File: ./codebase.txt ---
+
