@@ -19,7 +19,13 @@ colcon build
 
 # Source your workspace
 source install/setup.bash
+
 ```
+### Start pigpio
+```bash
+sudo pigpiod
+```
+
 ### Launch the lane follower feature
 ```bash
 # Source your workspace
@@ -29,3 +35,4 @@ source install/setup.bash
 # Launch the Lane Follower
 ros2 launch acds_launch acds.launch.py
 ```
+
