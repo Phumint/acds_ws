@@ -8,12 +8,9 @@ import os
 
 class LaneDetectionNode(Node):
     """
-    Real-time ROS2 lane detection (improved visualization version).
-    Uses sliding window detection, publishes lane offset and heading,
-    and optionally records an output video showing:
-      - ROI (red lines)
-      - Green filled lane polygon
-      - Offset & heading text
+    Lane detection with sliding window and T-section detection.
+    Publishes lane offset & heading angle, draws visualization,
+    and records output video.
     """
 
     def __init__(self):
@@ -21,20 +18,23 @@ class LaneDetectionNode(Node):
         self.pub_offset = self.create_publisher(Float32, 'lane_offset', 10)
         self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
 
-        # Parameters for recording
+        # --- Parameters ---
         self.declare_parameter('record', False)
         self.declare_parameter('output_path', '/home/rppi4/lane_output/lane_output.avi')
+        self.declare_parameter('t_section_turn', 'right')  # left or right
+
         self.record = self.get_parameter('record').get_parameter_value().bool_value
         self.output_path = self.get_parameter('output_path').get_parameter_value().string_value
+        self.t_section_turn = self.get_parameter('t_section_turn').get_parameter_value().string_value.lower()
 
-        # Camera setup
+        # --- Camera setup ---
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             self.get_logger().warning("⚠️ Camera not opened (index 0). Node still running.")
         self.latest_frame = None
         self.lock = threading.Lock()
 
-        # Optional video writer
+        # --- Video writer setup ---
         self.out = None
         if self.record:
             os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
@@ -44,13 +44,13 @@ class LaneDetectionNode(Node):
         else:
             self.get_logger().info("🧪 Recording disabled (record=false)")
 
-        # Start camera capture in background thread
+        # --- Background thread for camera ---
         threading.Thread(target=self._capture_frames, daemon=True).start()
 
-        # Timer for lane detection loop (20 Hz)
+        # --- Timer for processing loop (20 Hz) ---
         self.timer = self.create_timer(0.05, self.timer_callback)
 
-    # ---------------- CAMERA THREAD ----------------
+    # --------------------------------------------------
     def _capture_frames(self):
         """Continuously read frames from camera."""
         while True:
@@ -60,44 +60,61 @@ class LaneDetectionNode(Node):
                 with self.lock:
                     self.latest_frame = frame
 
-    # ---------------- DETECTION ----------------
+    # --------------------------------------------------
     def detect_lane_frame(self, frame):
-        """Sliding window lane detection with proper polygon overlay and heading calculation."""
+        """Sliding window lane detection + T-section handling."""
         height, width = frame.shape[:2]
+
+        # --- Region of Interest (modifiable) ---
         roi_points = np.array([[
-            (0, height-50),
-            (width, height-50),
-            (width, int(height*0.5)),
-            (0, int(height*0.5))
+            (0, height - 50),
+            (width, height - 50),
+            (width, int(height * 0.5)),
+            (0, int(height * 0.5))
         ]], dtype=np.int32)
 
-        # Draw ROI for visualization
         roi_frame = frame.copy()
         cv2.polylines(roi_frame, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
 
-        # Perspective transform setup
+        # --- Perspective Transform ---
         pts1 = np.float32([roi_points[0][3], roi_points[0][0], roi_points[0][2], roi_points[0][1]])  # tl, bl, tr, br
-        pts2 = np.float32([[0,0],[0,height],[width,0],[width,height]])
+        pts2 = np.float32([[0, 0], [0, height], [width, 0], [width, height]])
         matrix = cv2.getPerspectiveTransform(pts1, pts2)
         inv_matrix = cv2.getPerspectiveTransform(pts2, pts1)
         warped = cv2.warpPerspective(frame, matrix, (width, height))
 
-        # HSV threshold for blue lanes
+        # --- Mask for blue lanes ---
         hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
         lower_blue = np.array([86, 40, 0])
         upper_blue = np.array([150, 255, 255])
         mask = cv2.inRange(hsv, lower_blue, upper_blue)
 
-        # Sliding window detection
+        # --- Sliding window search ---
         lx, rx = self.sliding_window_lane(mask)
-        if len(lx) == 0 or len(rx) == 0:
-            return 0.0, 0.0, roi_frame
+        t_section_detected = (len(lx) < 100 and len(rx) < 100)
 
-        # Fit polynomials for heading calculation
+        if t_section_detected:
+            # T-section: perform configured turn
+            result = frame.copy()
+            offset_norm = 0.0
+            if self.t_section_turn == 'right':
+                heading_rad = -np.pi / 4   # Turn 45° right
+            elif self.t_section_turn == 'left':
+                heading_rad = np.pi / 4    # Turn 45° left
+            else:
+                heading_rad = 0.0  # default safe
+
+            cv2.putText(result, f"T-section detected → Turning {self.t_section_turn.upper()}",
+                        (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
+
+            self.get_logger().info(f"T-section detected → Turning {self.t_section_turn}")
+            return float(offset_norm), float(heading_rad), result
+
+        # --- Compute heading from lane curvature ---
         left_fit = np.polyfit(np.arange(len(lx)), lx, 2) if len(lx) > 2 else None
         right_fit = np.polyfit(np.arange(len(rx)), rx, 2) if len(rx) > 2 else None
 
-        # Compute heading (average of lane slopes)
         y_eval = height * 0.9
         heading_rad = 0.0
         if left_fit is not None and right_fit is not None:
@@ -106,34 +123,26 @@ class LaneDetectionNode(Node):
             lane_slope = (left_slope + right_slope) / 2.0
             heading_rad = float(np.arctan(lane_slope))
 
-        # Build lane polygon (for green filled overlay)
+        # --- Lane polygon ---
         min_length = min(len(lx), len(rx))
         top_left = (lx[0], height)
-        bottom_left = (lx[min_length-1], 0)
+        bottom_left = (lx[min_length - 1], 0)
         top_right = (rx[0], height)
-        bottom_right = (rx[min_length-1], 0)
-        quad_points = np.array([[top_left, bottom_left, bottom_right, top_right]], dtype=np.int32).reshape((-1,1,2))
+        bottom_right = (rx[min_length - 1], 0)
+        quad_points = np.array([[top_left, bottom_left, bottom_right, top_right]], dtype=np.int32).reshape((-1, 1, 2))
 
-        # Create lane mask and fill polygon
         lane_mask = np.zeros_like(warped)
         cv2.fillPoly(lane_mask, [quad_points], (0, 255, 0))
-
-        # Warp mask back to original perspective
         unwarped_lane = cv2.warpPerspective(lane_mask, inv_matrix, (width, height))
 
-        # Blend mask with original frame
         alpha = 0.3
         result = cv2.addWeighted(frame, 1, unwarped_lane, alpha, 0)
-
-        # Draw ROI boundary for clarity
         cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
 
-        # Compute lateral offset
         lane_center = (np.mean(lx) + np.mean(rx)) / 2
         pixel_offset = lane_center - width / 2
         offset_norm = pixel_offset / (width / 2)
 
-        # Display offset and heading
         cv2.putText(result, f"Offset: {offset_norm:.2f}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         cv2.putText(result, f"Heading: {heading_rad:.2f} rad", (10, 55),
@@ -141,10 +150,10 @@ class LaneDetectionNode(Node):
 
         return float(offset_norm), float(heading_rad), result
 
-    # ---------------- SLIDING WINDOW ----------------
+    # --------------------------------------------------
     def sliding_window_lane(self, mask):
-        """Sliding window lane detection."""
-        histogram = np.sum(mask[mask.shape[0]//2:, :], axis=0)
+        """Sliding window lane detection algorithm."""
+        histogram = np.sum(mask[mask.shape[0] // 2:, :], axis=0)
         midpoint = histogram.shape[0] // 2
         left_base = np.argmax(histogram[:midpoint])
         right_base = np.argmax(histogram[midpoint:]) + midpoint
@@ -178,8 +187,9 @@ class LaneDetectionNode(Node):
 
         return np.array(lx), np.array(rx)
 
-    # ---------------- TIMER CALLBACK ----------------
+    # --------------------------------------------------
     def timer_callback(self):
+        """Main timer loop: process frame, publish offset & heading."""
         with self.lock:
             frame = self.latest_frame
         if frame is None:
@@ -187,7 +197,7 @@ class LaneDetectionNode(Node):
 
         offset, heading, visual = self.detect_lane_frame(frame)
 
-        # Publish data
+        # Publish results
         msg_offset = Float32()
         msg_offset.data = offset
         self.pub_offset.publish(msg_offset)
@@ -196,14 +206,15 @@ class LaneDetectionNode(Node):
         msg_heading.data = heading
         self.pub_heading.publish(msg_heading)
 
-        # Save to video if enabled
+        # Record if enabled
         if self.record and self.out and self.out.isOpened():
             self.out.write(visual)
 
         self.get_logger().info(f"Lane offset: {offset:.3f}, Heading: {heading:.3f}")
 
-    # ---------------- CLEANUP ----------------
+    # --------------------------------------------------
     def cleanup(self):
+        """Release hardware safely."""
         self.get_logger().info("🧹 Releasing camera and video writer...")
         if self.cap and self.cap.isOpened():
             self.cap.release()
@@ -229,4 +240,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    main()
+    main()  
