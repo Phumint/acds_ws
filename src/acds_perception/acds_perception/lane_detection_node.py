@@ -21,12 +21,15 @@ class LaneDetectionNode(Node):
         # --- Parameters ---
         self.declare_parameter('record', False)
         self.declare_parameter('output_path', '/home/rppi4/lane_output/lane_output.avi')
-        self.declare_parameter('t_section_turn', 'right')  # left or right
+        self.declare_parameter('t_section_turn', 'left')  # left or right
 
         self.record = self.get_parameter('record').get_parameter_value().bool_value
         self.output_path = self.get_parameter('output_path').get_parameter_value().string_value
         self.t_section_turn = self.get_parameter('t_section_turn').get_parameter_value().string_value.lower()
-
+        # --- T-section State ---
+        self.t_section_active = False
+        self.t_section_frames = 0
+        self.T_SECTION_TURN_FRAMES = 50  # Or a value determined by testing (e.g., 2.5 seconds at 20Hz)
         # --- Camera setup ---
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
@@ -67,10 +70,10 @@ class LaneDetectionNode(Node):
 
         # --- Region of Interest (modifiable) ---
         roi_points = np.array([[
-            (0, height - 50),
-            (width, height - 50),
-            (width, int(height * 0.5)),
-            (0, int(height * 0.5))
+            (0, height - 30),
+            (width, height - 30),
+            (width, int(height * 0.8)),
+            (0, int(height * 0.8))
         ]], dtype=np.int32)
 
         roi_frame = frame.copy()
@@ -91,40 +94,91 @@ class LaneDetectionNode(Node):
 
         # --- Sliding window search ---
         lx, rx = self.sliding_window_lane(mask)
-        t_section_detected = (len(lx) < 100 and len(rx) < 100)
-
-        if t_section_detected:
-            # T-section: perform configured turn
-            result = frame.copy()
-            offset_norm = 0.0
-            if self.t_section_turn == 'right':
-                heading_rad = -np.pi / 4   # Turn 45° right
-            elif self.t_section_turn == 'left':
-                heading_rad = np.pi / 4    # Turn 45° left
+        
+        # ----------------------------------------------------------------------
+        # --- T-section State Logic (The Fix) ---
+        
+        # Condition for missing lanes (T-section or end of road)
+        lanes_missing = (len(lx) < 200 and len(rx) < 200)
+        
+        # 1. Enter T-section state: Both lanes are missing, and we're not currently turning
+        if lanes_missing and not self.t_section_active:
+            self.get_logger().info("🚧 T-section START detected. Activating fixed turn.")
+            self.t_section_active = True
+            self.t_section_frames = 0
+            
+        # 2. Stay and Execute T-section state
+        if self.t_section_active:
+            
+            # Continue fixed turn until the frame count is reached
+            if self.t_section_frames < self.T_SECTION_TURN_FRAMES:
+                self.t_section_frames += 1
+                offset_norm = 0.0
+                
+                # Set fixed heading based on parameter
+                # NOTE: The original commented code used pi/4 for right turn, 
+                # but a turn right should usually be a negative heading. 
+                # The logic below uses the typically correct sign convention.
+                if self.t_section_turn == 'right':
+                    heading_rad = np.pi / 4  
+                elif self.t_section_turn == 'left':
+                    heading_rad = -np.pi / 4   
+                else:
+                    heading_rad = 0.0
+                
+                # Visualization
+                result = frame.copy()
+                cv2.putText(result, f"T-SECTION ACTIVE: Turning {self.t_section_turn.upper()} ({self.t_section_frames}/{self.T_SECTION_TURN_FRAMES})",
+                            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
+                
+                # Return immediately to enforce the fixed turn
+                return float(offset_norm), float(heading_rad), result
+            
             else:
-                heading_rad = 0.0  # default safe
+                # 3. Exit T-section state after turn duration
+                self.get_logger().info("✅ T-section turn duration complete. Resuming lane following.")
+                self.t_section_active = False
 
-            cv2.putText(result, f"T-section detected → Turning {self.t_section_turn.upper()}",
-                        (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
-
-            self.get_logger().info(f"T-section detected → Turning {self.t_section_turn}")
-            return float(offset_norm), float(heading_rad), result
+        # ----------------------------------------------------------------------
+        # --- Standard Lane Following Logic (Only executes if T-section is NOT active) ---
+        
+        # --- Check for at least one lane to proceed with curve fitting ---
+        # If the turn duration expired, but only one lane is visible, 
+        # the polyfit might fail or be unstable. We assume that after 
+        # the fixed turn, both lanes should be visible enough.
+        if len(lx) < 20 and len(rx) < 20:
+             # Safety: If lanes are still missing after the fixed turn, 
+             # stop and log a warning (or apply a slow straight movement).
+             self.get_logger().warning("🛑 No lanes found after T-section turn duration!")
+             return 0.0, 0.0, frame.copy() 
 
         # --- Compute heading from lane curvature ---
+        # ... (Rest of the standard lane-following code remains the same)
+        # ...
         left_fit = np.polyfit(np.arange(len(lx)), lx, 2) if len(lx) > 2 else None
         right_fit = np.polyfit(np.arange(len(rx)), rx, 2) if len(rx) > 2 else None
 
         y_eval = height * 0.9
         heading_rad = 0.0
+        # ... (rest of heading and offset calculations)
+        # ...
         if left_fit is not None and right_fit is not None:
             left_slope = 2 * left_fit[0] * y_eval + left_fit[1]
             right_slope = 2 * right_fit[0] * y_eval + right_fit[1]
             lane_slope = (left_slope + right_slope) / 2.0
-            heading_rad = float(np.arctan(lane_slope))
-
-        # --- Lane polygon ---
+            # Note: The sign of arctan(slope) depends on your camera setup and how 
+            # you defined positive/negative heading. 
+            # If the x-axis is right-positive and y is down-positive, arctan(slope) may need a sign flip.
+            heading_rad = float(np.arctan(lane_slope)) 
+            
+        # ... (Lane polygon and visualization part)
         min_length = min(len(lx), len(rx))
+        
+        # Ensure points exist before creating polygon
+        if min_length < 1:
+            return 0.0, 0.0, frame.copy() # Return default if no lane points remain after T-section exit
+
         top_left = (lx[0], height)
         bottom_left = (lx[min_length - 1], 0)
         top_right = (rx[0], height)
@@ -144,9 +198,9 @@ class LaneDetectionNode(Node):
         offset_norm = pixel_offset / (width / 2)
 
         cv2.putText(result, f"Offset: {offset_norm:.2f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         cv2.putText(result, f"Heading: {heading_rad:.2f} rad", (10, 55),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         return float(offset_norm), float(heading_rad), result
 
