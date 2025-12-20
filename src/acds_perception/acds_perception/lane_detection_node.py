@@ -65,102 +65,41 @@ class LaneDetectionNode(Node):
 
     # --------------------------------------------------
     def detect_lane_frame(self, frame):
-        """Sliding window lane detection + T-section handling."""
         height, width = frame.shape[:2]
 
-        # --- Region of Interest (modifiable) ---
-        roi_points = np.array([[
-            (0, height - 30),
-            (width, height - 30),
-            (width, int(height * 0.8)),
-            (0, int(height * 0.8))
-        ]], dtype=np.int32)
-
-        roi_frame = frame.copy()
-        cv2.polylines(roi_frame, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
-
-        # --- Perspective Transform ---
-        pts1 = np.float32([roi_points[0][3], roi_points[0][0], roi_points[0][2], roi_points[0][1]])  # tl, bl, tr, br
-        pts2 = np.float32([[0, 0], [0, height], [width, 0], [width, height]])
+        # 1. ROI & Perspective Transform
+        roi_top, roi_bottom = int(height * 0.70), int(height * 0.95)
+        pts1 = np.float32([[0, roi_top], [width, roi_top], [0, roi_bottom], [width, roi_bottom]])
+        pts2 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
         matrix = cv2.getPerspectiveTransform(pts1, pts2)
-        inv_matrix = cv2.getPerspectiveTransform(pts2, pts1)
         warped = cv2.warpPerspective(frame, matrix, (width, height))
 
-        # --- Mask for blue lanes ---
-        hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
-        lower_blue = np.array([86, 40, 0])
-        upper_blue = np.array([150, 255, 255])
-        mask = cv2.inRange(hsv, lower_blue, upper_blue)
-
-        # --- Sliding window search ---
-        lx, rx = self.sliding_window_lane(mask)
+        # 2. Edge Detection (The Sharpness Filter)
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # ----------------------------------------------------------------------
-        # --- T-section State Logic (The Fix) ---
-        
-        # Condition for missing lanes (T-section or end of road)
-        lanes_missing = (len(lx) < 200 and len(rx) < 200)
-        
-        # 1. Enter T-section state: Both lanes are missing, and we're not currently turning
-        if lanes_missing and not self.t_section_active:
-            self.get_logger().info("🚧 T-section START detected. Activating fixed turn.")
-            self.t_section_active = True
-            self.t_section_frames = 0
-            
-        # 2. Stay and Execute T-section state
-        if self.t_section_active:
-            
-            # Continue fixed turn until the frame count is reached
-            if self.t_section_frames < self.T_SECTION_TURN_FRAMES:
-                self.t_section_frames += 1
-                offset_norm = 0.0
-                
-                # Set fixed heading based on parameter
-                # NOTE: The original commented code used pi/4 for right turn, 
-                # but a turn right should usually be a negative heading. 
-                # The logic below uses the typically correct sign convention.
-                if self.t_section_turn == 'right':
-                    heading_rad = np.pi / 4  
-                elif self.t_section_turn == 'left':
-                    heading_rad = -np.pi / 4   
-                else:
-                    heading_rad = 0.0
-                
-                # Visualization
-                result = frame.copy()
-                cv2.putText(result, f"T-SECTION ACTIVE: Turning {self.t_section_turn.upper()} ({self.t_section_frames}/{self.T_SECTION_TURN_FRAMES})",
-                            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
-                
-                # Return immediately to enforce the fixed turn
-                return float(offset_norm), float(heading_rad), result
-            
-            else:
-                # 3. Exit T-section state after turn duration
-                self.get_logger().info("✅ T-section turn duration complete. Resuming lane following.")
-                self.t_section_active = False
+        # We use a very high 'low' threshold. 
+        # Glare usually has a gradient strength of < 50. 
+        # A white lane on black road has a gradient strength of > 150.
+        edges = cv2.Canny(blurred, 150, 250) 
 
-        # ----------------------------------------------------------------------
-        # --- Standard Lane Following Logic (Only executes if T-section is NOT active) ---
+        # 3. Small Square Kernel (Optional)
+        # We use a 3x3 square just to denoise. 
+        # A square does not care if the lane is vertical, horizontal, or curved.
+        kernel = np.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        combined_mask = cv2.dilate(edges, kernel, iterations=1)
+
+        # 4. Sliding Window Search
+        lx, rx = self.sliding_window_lane(combined_mask)
+
+        # 5. Math & Fallbacks (Handling lost lanes in sharp turns)
+        if len(lx) < 10 and len(rx) < 10:
+            return 0.0, 0.0, frame.copy()
+
+        # Fit lines
+        left_fit = np.polyfit(np.arange(len(lx)), lx, 1) if len(lx) > 10 else None
+        right_fit = np.polyfit(np.arange(len(rx)), rx, 1) if len(rx) > 10 else None
         
-        # --- Check for at least one lane to proceed with curve fitting ---
-        # If the turn duration expired, but only one lane is visible, 
-        # the polyfit might fail or be unstable. We assume that after 
-        # the fixed turn, both lanes should be visible enough.
-        if len(lx) < 20 and len(rx) < 20:
-             # Safety: If lanes are still missing after the fixed turn, 
-             # stop and log a warning (or apply a slow straight movement).
-             self.get_logger().warning("🛑 No lanes found after T-section turn duration!")
-             return 0.0, 0.0, frame.copy() 
-
-        # --- Compute heading from lane curvature ---
-        # ... (Rest of the standard lane-following code remains the same)
-        # ...
-        left_fit = np.polyfit(np.arange(len(lx)), lx, 2) if len(lx) > 2 else None
-        right_fit = np.polyfit(np.arange(len(rx)), rx, 2) if len(rx) > 2 else None
-
-        y_eval = height * 0.9
-        heading_rad = 0.0
         # ... (rest of heading and offset calculations)
         # ...
         if left_fit is not None and right_fit is not None:
