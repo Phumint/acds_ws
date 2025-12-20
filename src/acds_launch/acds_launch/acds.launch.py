@@ -6,7 +6,7 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     record_arg = DeclareLaunchArgument(
         'record',
-        default_value='false',
+        default_value='true',
         description='Enable or disable video recording'
     )
 
