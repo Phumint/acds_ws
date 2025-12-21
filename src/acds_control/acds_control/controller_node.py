@@ -42,7 +42,7 @@ class ControllerNode(Node):
         composite = float((20* self.lane_offset_value *0.8) + (20* self.lane_heading_value *0.2))
         steer_angle = -float(self.pid.update(composite))
         
-        speed_proportion = 0.8 # proportion of speed reduction at max steering
+        speed_proportion = 0.5 # proportion of speed reduction at max steering
         speed = self.base_speed * (1 - min(abs(steer_angle)/20, 1)*speed_proportion) # reduce speed when steering
 
         # Publish the speed and steer commands
