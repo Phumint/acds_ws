@@ -6,6 +6,10 @@ import pigpio
 class MotorDriverNode(Node):
     def __init__(self):
         super().__init__('motor_driver_node')
+        
+        # --- CONFIGURATION ---
+        self.MAX_SPEED_FACTOR = 0.3  # Change this to slow down (0.5 = 50% power)
+        
         self.RPWM = 13
         self.LPWM = 12
         self.R_EN, self.L_EN = 6, 5
@@ -26,10 +30,15 @@ class MotorDriverNode(Node):
         self.pi.set_PWM_frequency(self.RPWM, self.PWM_FREQ)
         self.pi.set_PWM_frequency(self.LPWM, self.PWM_FREQ)
 
-        self.get_logger().info("Motor driver node initialized.")
+        self.get_logger().info(f"Motor driver initialized with Speed Factor: {self.MAX_SPEED_FACTOR}")
 
     def speed_callback(self, speed: Float32): 
-        duty = int(abs(speed.data * 1000000))
+        # Apply the scaling factor here
+        # speed.data is usually -1.0 to 1.0
+        # If speed is 1.0 and Factor is 0.5, result is 0.5 (50% duty)
+        scaled_speed = speed.data * self.MAX_SPEED_FACTOR
+        
+        duty = int(abs(scaled_speed * 1000000))
         duty = min(max(duty, 0), 1000000)  # Clamp between 0 and 1,000,000
 
         if speed.data > 0:
@@ -41,22 +50,15 @@ class MotorDriverNode(Node):
         else:
             self.pi.hardware_PWM(self.LPWM, 0, 0)
             self.pi.hardware_PWM(self.RPWM, 0, 0)
-        # self.get_logger().info(f"Set right motor speed to {duty*100:.1f}%")
 
     def cleanup(self):
         self.get_logger().info("Cleaning up GPIO...")
-        # Stop motor/servo outputs
         if hasattr(self, "pi"):  
             try:
-                # If it's a motor node:
                 self.pi.hardware_PWM(self.RPWM, 0, 0)
                 self.pi.hardware_PWM(self.LPWM, 0, 0)
                 self.pi.write(self.R_EN, 0)
                 self.pi.write(self.L_EN, 0)
-
-                # If it's a steering node with a servo:
-                # self.pi.set_servo_pulsewidth(self.servo_pin, 0)
-
                 self.pi.stop()
             except Exception as e:
                 self.get_logger().warn(f"Error during cleanup: {e}")

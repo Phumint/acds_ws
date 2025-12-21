@@ -6,7 +6,7 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     record_arg = DeclareLaunchArgument(
         'record',
-        default_value='false',
+        default_value='true',
         description='Enable or disable video recording'
     )
 
@@ -17,7 +17,10 @@ def generate_launch_description():
             executable='lane_detection_node',
             name='lane_detection_node',
             output='screen',
-            parameters=[{'record': LaunchConfiguration('record')}]
+            parameters=[{
+                'record': LaunchConfiguration('record'),
+                'output_path': '/home/rppi4/workspace/acds_ws/lane_output.avi' # Use absolute path here too
+            }]
         ),
         Node(
             package='acds_control',
