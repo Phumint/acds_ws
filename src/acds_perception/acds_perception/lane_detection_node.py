@@ -19,8 +19,8 @@ class LaneDetectionNode(Node):
         self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
 
         # --- Parameters ---
-        self.declare_parameter('record', False)
-        self.declare_parameter('output_path', '/home/rppi4/lane_output/lane_output.avi')
+        self.declare_parameter('record', True)
+        self.declare_parameter('output_path', '/home/rppi4/workspace/acds_ws/lane_output.avi')
         self.declare_parameter('t_section_turn', 'left')  # left or right
 
         self.record = self.get_parameter('record').get_parameter_value().bool_value
@@ -31,7 +31,7 @@ class LaneDetectionNode(Node):
         self.t_section_frames = 0
         self.T_SECTION_TURN_FRAMES = 50  # Or a value determined by testing (e.g., 2.5 seconds at 20Hz)
         # --- Camera setup ---
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
         if not self.cap.isOpened():
             self.get_logger().warning("⚠️ Camera not opened (index 0). Node still running.")
         self.latest_frame = None
@@ -74,27 +74,72 @@ class LaneDetectionNode(Node):
         matrix = cv2.getPerspectiveTransform(pts1, pts2)
         warped = cv2.warpPerspective(frame, matrix, (width, height))
 
-        # 2. Edge Detection (The Sharpness Filter)
-        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        # --- Mask for blue lanes ---
+        hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
+        lower_blue = np.array([86, 40, 0])
+        upper_blue = np.array([150, 255, 255])
+        mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+        # --- Sliding window search ---
+        lx, rx = self.sliding_window_lane(mask)
         
-        # We use a very high 'low' threshold. 
-        # Glare usually has a gradient strength of < 50. 
-        # A white lane on black road has a gradient strength of > 150.
-        edges = cv2.Canny(blurred, 150, 250) 
+        # ----------------------------------------------------------------------
+        # --- T-section State Logic (The Fix) ---
+        
+        # Condition for missing lanes (T-section or end of road)
+        lanes_missing = (len(lx) < 200 and len(rx) < 200)
+        
+        # 1. Enter T-section state: Both lanes are missing, and we're not currently turning
+        if lanes_missing and not self.t_section_active:
+            self.get_logger().info("🚧 T-section START detected. Activating fixed turn.")
+            self.t_section_active = True
+            self.t_section_frames = 0
+            
+        # 2. Stay and Execute T-section state
+        if self.t_section_active:
+            
+            # Continue fixed turn until the frame count is reached
+            if self.t_section_frames < self.T_SECTION_TURN_FRAMES:
+                self.t_section_frames += 1
+                offset_norm = 0.0
+                
+                # Set fixed heading based on parameter
+                # NOTE: The original commented code used pi/4 for right turn, 
+                # but a turn right should usually be a negative heading. 
+                # The logic below uses the typically correct sign convention.
+                if self.t_section_turn == 'right':
+                    heading_rad = np.pi / 4  
+                elif self.t_section_turn == 'left':
+                    heading_rad = -np.pi / 4   
+                else:
+                    heading_rad = 0.0
+                
+                # Visualization
+                result = frame.copy()
+                cv2.putText(result, f"T-SECTION ACTIVE: Turning {self.t_section_turn.upper()} ({self.t_section_frames}/{self.T_SECTION_TURN_FRAMES})",
+                            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.polylines(result, roi_points, isClosed=True, color=(0, 0, 255), thickness=1)
+                
+                # Return immediately to enforce the fixed turn
+                return float(offset_norm), float(heading_rad), result
+            
+            else:
+                # 3. Exit T-section state after turn duration
+                self.get_logger().info("✅ T-section turn duration complete. Resuming lane following.")
+                self.t_section_active = False
 
-        # 3. Small Square Kernel (Optional)
-        # We use a 3x3 square just to denoise. 
-        # A square does not care if the lane is vertical, horizontal, or curved.
-        kernel = np.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        combined_mask = cv2.dilate(edges, kernel, iterations=1)
-
-        # 4. Sliding Window Search
-        lx, rx = self.sliding_window_lane(combined_mask)
-
-        # 5. Math & Fallbacks (Handling lost lanes in sharp turns)
-        if len(lx) < 10 and len(rx) < 10:
-            return 0.0, 0.0, frame.copy()
+        # ----------------------------------------------------------------------
+        # --- Standard Lane Following Logic (Only executes if T-section is NOT active) ---
+        
+        # --- Check for at least one lane to proceed with curve fitting ---
+        # If the turn duration expired, but only one lane is visible, 
+        # the polyfit might fail or be unstable. We assume that after 
+        # the fixed turn, both lanes should be visible enough.
+        if len(lx) < 20 and len(rx) < 20:
+             # Safety: If lanes are still missing after the fixed turn, 
+             # stop and log a warning (or apply a slow straight movement).
+             self.get_logger().warning("🛑 No lanes found after T-section turn duration!")
+             return 0.0, 0.0, frame.copy() 
 
         # Fit lines
         left_fit = np.polyfit(np.arange(len(lx)), lx, 1) if len(lx) > 10 else None
