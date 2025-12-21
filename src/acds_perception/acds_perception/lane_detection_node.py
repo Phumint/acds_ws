@@ -6,194 +6,107 @@ import numpy as np
 import threading
 import os
 
+from inverse_perspective import inversePerspectiveTransform
+from searchBox import SearchBox
+from edge import detect_edges
+from steering import SteeringController
+
 # ==============================================================================
 #  ALGORITHM CLASS WITH SANITY CHECKS
 # ==============================================================================
 
 class LaneDetectionAlgorithm:
-    def __init__(self):
-        # --- HARDCODED PARAMETERS ---
-        # Bottom-Left (x, y) - slightly indented to remove bezel
-        self.bl = (0, 480)   
-        
-        # Top-Left (x, y) - at the 60% mark
-        self.tl = (0, 288)   
-        
-        # Top-Right (x, y) - at the 60% mark
-        self.tr = (640, 288) 
-        
-        # Bottom-Right (x, y) - slightly indented to remove bezel
-        self.br = (640, 480)
-        
-        # self.bl, self.tl, self.tr, self.br = (30, 477), (115, 247), (520, 255), (638, 473)
-        self.pts1 = np.float32([self.tl, self.bl, self.tr, self.br])
-        self.pts2 = np.float32([[0, 0], [0, 480], [640, 0], [640, 480]])    
-        self.matrix = cv2.getPerspectiveTransform(self.pts1, self.pts2)
-        self.inv_matrix = cv2.getPerspectiveTransform(self.pts2, self.pts1)
+    def __init__(self, points_path="_point_.npz", target_size=(720, 480)):
+        self.target_size = target_size
+        self.w, self.h = target_size
 
-        # Tuning
-        self.lower_white = np.array([0, 0, 200])
-        self.upper_white = np.array([179, 60, 255])
-        self.canny_low = 50
-        self.canny_high = 150
-        self.color_weight = 0.7
-        self.final_thresh = 50
-        
-        # Smoothing & Memory
-        self.prevLx, self.prevRx = [], []
-        self.alpha = 0.5
-        
-        # --- SANITY CHECK PARAMETERS ---
-        self.EXPECTED_LANE_WIDTH = 450  # Pixels between L and R lines (Tune this!)
-        self.LANE_WIDTH_TOLERANCE = 150 # Allow +/- 150 pixels variance
-        
-        self.last_valid_offset = 0.0
-        self.last_valid_heading = 0.0
-        self.consecutive_lost_frames = 0
-        self.MAX_LOST_FRAMES = 10  # Hold last command for ~0.5 seconds (at 20Hz)
+        # 1. Load Perspective Points
+        try:
+            points_data = np.load(points_path)
+            points = points_data["points"]
+            # Order: TL, TR, BR, BL
+            self.src_points = np.float32([points[2], points[3], points[1], points[0]])
+            self.dst_points = np.float32([points[6], points[7], points[5], points[4]])
 
-    def process_frame(self, frame):
-        height, width = frame.shape[:2]
-        
-        # 1. PRE-PROCESSING
-        bird_eye = cv2.warpPerspective(frame, self.matrix, (640, 480))
-        gray = cv2.cvtColor(bird_eye, cv2.COLOR_BGR2GRAY)
-        hsv = cv2.cvtColor(bird_eye, cv2.COLOR_BGR2HSV)
-        blurred = cv2.bilateralFilter(gray, 9, 75, 75)
+        except Exception as e:
+            print(f"Error loading points: {e}")
+            # Fallback to empty/default if file is missing
+            self.src_points = self.dst_points = None
 
-        # 2. FEATURE EXTRACTION
-        white_mask = cv2.inRange(hsv, self.lower_white, self.upper_white)
-        canny_edges = cv2.Canny(blurred, self.canny_low, self.canny_high)
-        edges_dilated = cv2.dilate(canny_edges, np.ones((3,3), np.uint8), iterations=1)
+        # 2. Initialize Sub-modules
+        # We initialize with a dummy frame and update later to keep objects persistent
+        self.ipt = inversePerspectiveTransform(np.zeros((self.h, self.w, 3), dtype=np.uint8))
+        self.steering = SteeringController(
+            frame_width=self.w, 
+            frame_height=self.h, 
+            lookahead_distance=0.6
+        )
+        self.steering.set_gains(kp=0.5, ki=0.0, kd=0.1)
         
-        combined_prob = cv2.addWeighted(white_mask, self.color_weight, edges_dilated, 1.0 - self.color_weight, 0)
-        _, mask = cv2.threshold(combined_prob, self.final_thresh, 255, cv2.THRESH_BINARY)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5,5), np.uint8))
+        # SearchBox is initialized as None; it will be built on the first frame
+        self.search_box = None
+        
 
-        # 3. SLIDING WINDOW
-        histogram = np.sum(mask[mask.shape[0]//2:, :], axis=0)
-        midpoint = int(histogram.shape[0]//2)
-        
-        if np.max(histogram[:midpoint]) > 0:
-            left_base = np.argmax(histogram[:midpoint])
+    def process_frame(self, frame, debug=False):
+        """
+        Processes a single frame and returns the calculated steering angle.
+        """
+        # Resize to maintain consistency with calibrated points
+        frame = cv2.resize(frame, self.target_size)
+
+        # 1. Birdeye View Transformation
+        self.ipt.frame = frame
+        birdeye_view = self.ipt.inverse_perspective_transform(
+                                self.src_points, self.dst_points, self.w, self.h)
+
+        # 2. Edge Detection
+        detector = detect_edges(birdeye_view)
+        birdeye_edges = detector.canny_edge()
+
+        # 3. Search Box logic
+        if self.search_box is None:
+            self.search_box = SearchBox(
+                birdeye_view, birdeye_edges, 
+                lx=100, rx=500, y=450, width=80, height=20
+            )
         else:
-            left_base = width // 4
+            self.search_box.frame = birdeye_view
+            self.search_box.mask = birdeye_edges
 
-        if np.max(histogram[midpoint:]) > 0:
-            right_base = np.argmax(histogram[midpoint:]) + midpoint
-        else:
-            right_base = 3 * width // 4
+        vis, llane, rlane = self.search_box.visualize()
 
-        y = mask.shape[0]
-        lx, rx = [], []
-        ly_coords, ry_coords = [], [] 
+        # 4. Steering Calculation
+        steering_angle, lane_center = self.steering.calculate_steering_angle(llane, rlane)
 
-        while y > 0:
-            # Left
-            win_l = mask[max(0, y-20):y, max(0, left_base-50):min(640, left_base+50)]
-            cnts_l, _ = cv2.findContours(win_l, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if cnts_l:
-                c = max(cnts_l, key=cv2.contourArea)
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    left_base = left_base - 50 + int(M["m10"] / M["m00"])
-                    lx.append(left_base)
-                    ly_coords.append(y - 10)
+        img_center = self.w // 2
+        offset = None
+        if lane_center is not None:
+            offset = lane_center - img_center
 
-            # Right
-            win_r = mask[max(0, y-20):y, max(0, right_base-50):min(640, right_base+50)]
-            cnts_r, _ = cv2.findContours(win_r, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if cnts_r:
-                c = max(cnts_r, key=cv2.contourArea)
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    right_base = right_base - 50 + int(M["m10"] / M["m00"])
-                    rx.append(right_base)
-                    ry_coords.append(y - 10)
-            y -= 20
+        steering_angle = np.degrees(steering_angle)
 
-        # 4. VALIDATION & LOGIC
-        valid_lane_found = False
+        if debug:
+            self._show_debug_windows(frame, birdeye_edges, vis, steering_angle, lane_center)
+
+        return float(offset), float(steering_angle)
+
+    def _show_debug_windows(self, frame, edges, vis, angle, lane_center):
+        """Internal helper for visualization"""
+        # Draw perspective area on original frame
+        debug_frame = frame.copy()
+        cv2.polylines(debug_frame, [self.src_points.astype(int)], True, (0, 255, 0), 2)
         
-        # Check A: Do we have enough points?
-        if len(lx) > 3 and len(rx) > 3:
-            
-            # Check B: Is the width sane?
-            avg_lx = np.mean(lx)
-            avg_rx = np.mean(rx)
-            calculated_width = avg_rx - avg_lx
-            
-            min_width = self.EXPECTED_LANE_WIDTH - self.LANE_WIDTH_TOLERANCE
-            max_width = self.EXPECTED_LANE_WIDTH + self.LANE_WIDTH_TOLERANCE
-            
-            if min_width < calculated_width < max_width:
-                valid_lane_found = True
-                self.consecutive_lost_frames = 0 # Reset counter
-                
-                # Update Smoothing
-                if self.prevLx and len(lx) == len(self.prevLx):
-                    lx = (np.array(lx) * self.alpha + np.array(self.prevLx) * (1 - self.alpha)).astype(int).tolist()
-                self.prevLx = lx
-                if self.prevRx and len(rx) == len(self.prevRx):
-                    rx = (np.array(rx) * self.alpha + np.array(self.prevRx) * (1 - self.alpha)).astype(int).tolist()
-                self.prevRx = rx
-
-                # Calc Offset
-                lane_center_px = (lx[0] + rx[0]) / 2
-                offset_norm = (lane_center_px - (width / 2)) / (width / 2)
-                
-                # Calc Heading
-                slopes = []
-                fit_l = np.polyfit(ly_coords[:len(lx)], lx, 1)
-                fit_r = np.polyfit(ry_coords[:len(rx)], rx, 1)
-                slopes.append(fit_l[0]) 
-                slopes.append(fit_r[0])
-                avg_slope_inv = np.mean(slopes)
-                heading_rad = float(np.arctan(-avg_slope_inv))
-                
-                # Store valid values
-                self.last_valid_offset = offset_norm
-                self.last_valid_heading = heading_rad
-            else:
-                # Width check failed - Treat as noise
-                pass 
-
-        # 5. HANDLE LOST LANES (Memory Logic)
-        if not valid_lane_found:
-            self.consecutive_lost_frames += 1
-            if self.consecutive_lost_frames < self.MAX_LOST_FRAMES:
-                # Use memory
-                offset_norm = self.last_valid_offset
-                heading_rad = self.last_valid_heading
-                
-                # Visual Indicator for "Memory Mode"
-                cv2.putText(frame, "⚠️ LANE LOST - USING MEMORY", (50, 240), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
-            else:
-                # Lost for too long - Stop/Neutral
-                offset_norm = 0.0
-                heading_rad = 0.0
-                cv2.putText(frame, "🛑 LANE LOST - STOP", (50, 240), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        else:
-            offset_norm = self.last_valid_offset
-            heading_rad = self.last_valid_heading
-
-        # 6. VISUALIZATION
-        overlay = bird_eye.copy()
-        if valid_lane_found and len(lx) > 0 and len(rx) > 0:
-            pts_left = np.array([[x, 480 - i*20] for i, x in enumerate(lx)])
-            pts_right = np.array([[x, 480 - i*20] for i, x in enumerate(rx)])
-            pts = np.vstack([pts_left, np.flipud(pts_right)])
-            cv2.fillPoly(overlay, [np.int32(pts)], (0, 255, 0))
-
-        unwarped_lane = cv2.warpPerspective(overlay, self.inv_matrix, (width, height))
-        result = cv2.addWeighted(frame, 1, unwarped_lane, 0.5, 0)
+        # Annotate steering visualization
+        center_x = self.w // 2
+        cv2.line(vis, (center_x, 0), (center_x, self.h), (0, 255, 255), 1)
+        if lane_center is not None:
+            cv2.line(vis, (int(lane_center), 0), (int(lane_center), self.h), (255, 0, 255), 2)
         
-        cv2.putText(result, f"Off: {offset_norm:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.putText(result, f"Head: {heading_rad:.2f}", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(vis, f"Angle: {angle:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
 
-        return float(offset_norm), float(heading_rad), result
+        cv2.imshow('Edges', edges)
+        cv2.imshow('Birdseye + Search', vis)
+        cv2.imshow('Perspective Area', debug_frame)
 
 
 # ==============================================================================
