@@ -1,11 +1,14 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
+from sensor_msgs.msg import Image
 import cv2
 import numpy as np
 import threading
 import os
 import math
+
+from cv_bridge import CvBridge
 
 from acds_perception.inverse_perspective import inversePerspectiveTransform
 from acds_perception.searchBox import SearchBox
@@ -17,7 +20,7 @@ from acds_perception.steering import SteeringController
 # ==============================================================================
 
 class LaneDetectionAlgorithm:
-    def __init__(self, points_path="/home/rppi4/workspace/acds_ws/src/acds_perception/acds_perception/_point_.npz", target_size=(720, 480)):
+    def __init__(self, points_path="/home/rppi4/workspace/acds_ws/src/acds_perception/acds_perception/_point_.npz", target_size=(640, 480)):
         self.target_size = target_size
         self.w, self.h = target_size
 
@@ -144,66 +147,85 @@ class LaneDetectionAlgorithm:
 
 
 # ==============================================================================
-#  ROS NODE 
+#  ROS NODE (CS30 CAMERA)
 # ==============================================================================
 
 class LaneDetectionNode(Node):
     def __init__(self):
         super().__init__('lane_detection_node')
+
         self.pub_offset = self.create_publisher(Float32, 'lane_offset', 10)
         self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
-        
+
+        self.declare_parameter('camera_prefix', '/camera1_HV0130315L0317')
         self.declare_parameter('record', True)
         self.declare_parameter('output_path', '/home/rppi4/workspace/acds_ws/lane_output.avi')
-        self.record = self.get_parameter('record').get_parameter_value().bool_value
-        self.output_path = self.get_parameter('output_path').get_parameter_value().string_value
 
-        self.get_logger().info(f"Initializing Lane Algorithm with SANITY CHECKS.")
+        prefix = self.get_parameter('camera_prefix').value
+        self.record = self.get_parameter('record').value
+        self.output_path = self.get_parameter('output_path').value
+
         self.detector = LaneDetectionAlgorithm()
+        self.bridge = CvBridge()
 
-        self.cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        if not self.cap.isOpened():
-            self.get_logger().warning("⚠️ Camera not opened.")
         self.latest_frame = None
         self.lock = threading.Lock()
+
+        # CS30 RGB subscription
+        self.create_subscription(
+            Image,
+            f'{prefix}/rgb_raw',
+            self.rgb_callback,
+            1
+        )
 
         self.out = None
         if self.record:
             os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            self.out = cv2.VideoWriter(self.output_path, fourcc, 20.0, (720, 480))
+            self.out = cv2.VideoWriter(self.output_path, fourcc, 20.0, (640, 480))
 
-        threading.Thread(target=self._capture_frames, daemon=True).start()
         self.create_timer(0.05, self.timer_callback)
 
-    def _capture_frames(self):
-        while True:
-            ret, frame = self.cap.read()
-            if ret:
-                frame = cv2.resize(frame, (640, 480))
-                with self.lock:
-                    self.latest_frame = frame
+    def rgb_callback(self, msg):
+        try:
+            if msg.encoding == '8SC3':
+                img = np.frombuffer(msg.data, dtype=np.byte).reshape(
+                    msg.height, msg.width, 3).astype(np.uint8)
+            else:
+                img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            img = cv2.resize(img, (640, 480))
+
+            with self.lock:
+                self.latest_frame = img
+
+        except Exception as e:
+            self.get_logger().error(f"Image conversion failed: {e}")
 
     def timer_callback(self):
         with self.lock:
             frame = self.latest_frame
-        if frame is None: return
+
+        if frame is None:
+            return
 
         offset, heading, visual = self.detector.process_frame(frame)
 
-        self.pub_offset.publish(Float32(data=offset))
-        self.pub_heading.publish(Float32(data=heading))
+        self.pub_offset.publish(Float32(data=float(offset)))
+        self.pub_heading.publish(Float32(data=float(heading)))
 
         if self.record and self.out and self.out.isOpened():
             self.out.write(visual)
 
     def cleanup(self):
-        if self.cap: self.cap.release()
-        if self.out: self.out.release()
+        if self.out:
+            self.out.release()
 
     def destroy_node(self):
         self.cleanup()
         super().destroy_node()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -216,6 +238,7 @@ def main(args=None):
         node.cleanup()
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
