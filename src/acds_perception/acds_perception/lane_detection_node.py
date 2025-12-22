@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import threading
 import os
+import math
 
 from acds_perception.inverse_perspective import inversePerspectiveTransform
 from acds_perception.searchBox import SearchBox
@@ -86,6 +87,9 @@ class LaneDetectionAlgorithm:
         if lane_center is not None:
             offset = lane_center - img_center
 
+        # 5. Apply Rich Visualization (Arrows, Text, etc.)
+        vis = self._draw_overlay(vis, steering_angle, lane_center)
+
         # steering_angle = np.radians(steering_angle)
 
         if debug:
@@ -93,23 +97,50 @@ class LaneDetectionAlgorithm:
 
         return float(offset), float(steering_angle), vis
 
-    def _show_debug_windows(self, frame, edges, vis, angle, lane_center):
-        """Internal helper for visualization"""
-        # Draw perspective area on original frame
-        debug_frame = frame.copy()
-        cv2.polylines(debug_frame, [self.src_points.astype(int)], True, (0, 255, 0), 2)
-        
-        # Annotate steering visualization
+    def _draw_overlay(self, vis, steering_angle, lane_center):
+        """
+        Helper to draw the arrows, text, and direction indicators on the 'vis' image.
+        """
+        # --- Draw Steering Info Text ---
+        cv2.putText(vis, f'Steering: {steering_angle:.1f} deg', 
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+        # --- Draw Direction Arrow ---
         center_x = self.w // 2
-        cv2.line(vis, (center_x, 0), (center_x, self.h), (0, 255, 255), 1)
+        center_y = self.h - 50
+        arrow_length = 100
+
+        # Calculate arrow endpoint
+        angle_rad = np.radians(steering_angle)
+        end_x = int(center_x + arrow_length * math.sin(angle_rad))
+        end_y = int(center_y - arrow_length * math.cos(angle_rad))
+
+        cv2.arrowedLine(vis, (center_x, center_y), (end_x, end_y), 
+                        (0, 255, 255), 3, tipLength=0.3)
+
+        # --- Draw Vertical Reference Lines ---
+        # Lane Center (Magenta)
         if lane_center is not None:
             cv2.line(vis, (int(lane_center), 0), (int(lane_center), self.h), (255, 0, 255), 2)
         
-        cv2.putText(vis, f"Angle: {angle:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
+        # Image Center (Yellow)
+        cv2.line(vis, (center_x, 0), (center_x, self.h), (0, 255, 255), 1)
 
-        # cv2.imshow('Edges', edges)
-        # cv2.imshow('Birdseye + Search', vis)
-        # cv2.imshow('Perspective Area', debug_frame)
+        # --- Draw Direction Status Text ---
+        if steering_angle < -5:
+            direction = "LEFT"
+            color = (0, 165, 255)  # Orange
+        elif steering_angle > 5:
+            direction = "RIGHT"
+            color = (0, 165, 255)  # Orange
+        else:
+            direction = "STRAIGHT"
+            color = (0, 255, 0)    # Green
+        
+        cv2.putText(vis, direction, (10, 60), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+        return vis
 
 
 # ==============================================================================
