@@ -11,7 +11,7 @@ class SteeringDriverNode(Node):
         self.NEUTRAL_US = 1500
         self.MIN_US = 1000
         self.MAX_US = 2000
-        self.MAX_WHEEL_ANGLE = 20.0  # degrees
+        self.MAX_WHEEL_ANGLE = 30.0  # degrees
 
         self.subscription_angle = self.create_subscription(Float32, 'steering_angle', self.angle_callback, 10)
         

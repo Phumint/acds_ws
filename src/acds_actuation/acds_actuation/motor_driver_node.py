@@ -8,7 +8,7 @@ class MotorDriverNode(Node):
         super().__init__('motor_driver_node')
         
         # --- CONFIGURATION ---
-        self.MAX_SPEED_FACTOR = 0.3  # Change this to slow down (0.5 = 50% power)
+        self.MAX_SPEED_FACTOR = 0.4  # Change this to slow down (0.5 = 50% power)
         
         self.RPWM = 13
         self.LPWM = 12

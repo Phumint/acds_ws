@@ -16,7 +16,7 @@ from acds_perception.steering import SteeringController
 # ==============================================================================
 
 class LaneDetectionAlgorithm:
-    def __init__(self, points_path="_point_.npz", target_size=(720, 480)):
+    def __init__(self, points_path="/home/rppi4/workspace/acds_ws/src/acds_perception/acds_perception/_point_.npz", target_size=(720, 480)):
         self.target_size = target_size
         self.w, self.h = target_size
 
@@ -74,6 +74,9 @@ class LaneDetectionAlgorithm:
             self.search_box.mask = birdeye_edges
 
         vis, llane, rlane = self.search_box.visualize()
+        # Ensure 'vis' is 3-channel (BGR) before returning
+        if len(vis.shape) == 2:
+            vis = cv2.cvtColor(vis, cv2.COLOR_GRAY2BGR)
 
         # 4. Steering Calculation
         steering_angle, lane_center = self.steering.calculate_steering_angle(llane, rlane)
@@ -83,12 +86,12 @@ class LaneDetectionAlgorithm:
         if lane_center is not None:
             offset = lane_center - img_center
 
-        steering_angle = np.radians(steering_angle)
+        # steering_angle = np.radians(steering_angle)
 
         if debug:
             self._show_debug_windows(frame, birdeye_edges, vis, steering_angle, lane_center)
 
-        return float(offset), float(steering_angle), 0
+        return float(offset), float(steering_angle), vis
 
     def _show_debug_windows(self, frame, edges, vis, angle, lane_center):
         """Internal helper for visualization"""
@@ -104,9 +107,9 @@ class LaneDetectionAlgorithm:
         
         cv2.putText(vis, f"Angle: {angle:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
 
-        cv2.imshow('Edges', edges)
-        cv2.imshow('Birdseye + Search', vis)
-        cv2.imshow('Perspective Area', debug_frame)
+        # cv2.imshow('Edges', edges)
+        # cv2.imshow('Birdseye + Search', vis)
+        # cv2.imshow('Perspective Area', debug_frame)
 
 
 # ==============================================================================
@@ -137,7 +140,7 @@ class LaneDetectionNode(Node):
         if self.record:
             os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            self.out = cv2.VideoWriter(self.output_path, fourcc, 20.0, (640, 480))
+            self.out = cv2.VideoWriter(self.output_path, fourcc, 20.0, (720, 480))
 
         threading.Thread(target=self._capture_frames, daemon=True).start()
         self.create_timer(0.05, self.timer_callback)
