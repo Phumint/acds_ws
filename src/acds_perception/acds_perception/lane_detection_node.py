@@ -6,10 +6,10 @@ import numpy as np
 import threading
 import os
 
-from inverse_perspective import inversePerspectiveTransform
-from searchBox import SearchBox
-from edge import detect_edges
-from steering import SteeringController
+from acds_perception.inverse_perspective import inversePerspectiveTransform
+from acds_perception.searchBox import SearchBox
+from acds_perception.edge import detect_edges
+from acds_perception.steering import SteeringController
 
 # ==============================================================================
 #  ALGORITHM CLASS WITH SANITY CHECKS
