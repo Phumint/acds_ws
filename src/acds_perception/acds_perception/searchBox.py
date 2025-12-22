@@ -124,12 +124,14 @@ class SearchBox():
                 if new_x is not None:
                     # Check if box center would cross center line
                     box_center = new_x + self.width // 2
-                    if box_center < self.center_x:
-                        # Valid detection and doesn't cross
+                    # if box_center < self.center_x:
+                    #     # Valid detection and doesn't cross
+                    #     self.left_positions[i] = new_x
+                    # else:
+                    #     # Detection crosses center line - clamp it
+                    #     self.left_positions[i] = self.center_x - self.width // 2
+                    if new_x is not None:
                         self.left_positions[i] = new_x
-                    else:
-                        # Detection crosses center line - clamp it
-                        self.left_positions[i] = self.center_x - self.width // 2
                 else:
                     # No detection - interpolate from boxes above and below
                     # Find nearest detected boxes above and below
@@ -193,12 +195,15 @@ class SearchBox():
                 if new_x is not None:
                     # Check if box center would cross center line
                     box_center = new_x + self.width // 2
-                    if box_center > self.center_x:
-                        # Valid detection and doesn't cross
+                    # if box_center > self.center_x:
+                    #     # Valid detection and doesn't cross
+                    #     self.right_positions[i] = new_x
+                    # else:
+                    #     # Detection crosses center line - clamp it
+                    #     self.right_positions[i] = self.center_x - self.width // 2
+
+                    if new_x is not None:
                         self.right_positions[i] = new_x
-                    else:
-                        # Detection crosses center line - clamp it
-                        self.right_positions[i] = self.center_x - self.width // 2
                 else:
                     # No detection - interpolate from boxes above and below
                     above_idx = None

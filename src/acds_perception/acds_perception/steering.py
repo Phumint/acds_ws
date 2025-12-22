@@ -90,7 +90,7 @@ class SteeringController():
         normalized_output = np.clip(output / max_deviation, -1.0, 1.0)
         
         # Scale to degrees (-45 to +45 is reasonable for most applications)
-        steering_angle = normalized_output * 45.0
+        steering_angle = normalized_output * 30
         
         return steering_angle, lane_center
     

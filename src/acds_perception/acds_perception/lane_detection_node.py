@@ -71,7 +71,7 @@ class LaneDetectionAlgorithm:
         if self.search_box is None:
             self.search_box = SearchBox(
                 birdeye_view, birdeye_edges, 
-                lx=100, rx=500, y=450, width=150, height=20, num_boxes = 15
+                lx=150, rx=300, y=450, width=120, height=20, num_boxes = 15
             )
         else:
             self.search_box.frame = birdeye_view
