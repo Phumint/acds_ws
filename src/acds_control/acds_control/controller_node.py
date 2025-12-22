@@ -23,7 +23,7 @@ class ControllerNode(Node):
         # Kp=20.0 means: if we are 100% off track (1.0), steer 20 degrees (max).
         # Ki=0.05 helps fix small steady-state errors (if car drifts to one side).
         # Kd=0.5 adds a "brake" to the steering so it doesn't oscillate.
-        self.pid = PID(Kp=0.8, Ki=0.05, Kd=0.3, output_limits=(-30, 30)) 
+        self.pid = PID(Kp=0.8, Ki=0.0, Kd=0.5, output_limits=(-30, 30)) 
 
         self.base_speed = 0.7
         self.img_width = 720.0 
@@ -45,17 +45,17 @@ class ControllerNode(Node):
         # 2. CALCULATE ERROR
         # Increase heading weight slightly to anticipate turns earlier
         # Offset 0.6, Heading 0.4 gives a snappier response to curves
-        error = (30* 0.7 * norm_offset) + (30* 0.3 * norm_heading)
+        # error = (60* 0.0 * norm_offset) + (30* 1.0 * norm_heading)
         
         # 3. PID UPDATE
         # Note: We removed the arbitrary "* 20.0" multiplier from inside the update
         # and instead folded it into the Kp gain above. It's cleaner math.
-        steer_angle = float(self.pid.update(error))
-
+        # steer_angle = float(self.pid.update(error))
+        steer_angle = (norm_heading)
         # 5. SPEED CONTROL
         # Slow down if steering angle is sharp (>10 degrees)
-        speed_proportion = 0.3 
-        speed = self.base_speed * (1 - min(abs(steer_angle)/0.0, 1) * speed_proportion)
+        speed_proportion = 0.7 
+        speed = self.base_speed * (1 + min(abs(steer_angle)/30.0, 1) * speed_proportion)
 
         self.pub_speed.publish(Float32(data=speed))
         self.pub_steer.publish(Float32(data=steer_angle))

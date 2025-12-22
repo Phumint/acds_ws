@@ -42,7 +42,7 @@ class LaneDetectionAlgorithm:
             frame_height=self.h, 
             lookahead_distance=0.6
         )
-        self.steering.set_gains(kp=0.5, ki=0.0, kd=0.1)
+        self.steering.set_gains(kp=1.5, ki=0.025, kd=0.8)
         
         # SearchBox is initialized as None; it will be built on the first frame
         self.search_box = None
@@ -68,7 +68,7 @@ class LaneDetectionAlgorithm:
         if self.search_box is None:
             self.search_box = SearchBox(
                 birdeye_view, birdeye_edges, 
-                lx=100, rx=500, y=450, width=80, height=20
+                lx=100, rx=500, y=450, width=150, height=20, num_boxes = 15
             )
         else:
             self.search_box.frame = birdeye_view
