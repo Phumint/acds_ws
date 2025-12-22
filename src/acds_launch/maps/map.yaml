@@ -1,0 +1,6 @@
+image: map.pgm
+resolution: 0.00178253119 #0.05  # meters per pixel (ADJUST based on your floor plan scale)
+origin: [4.56684490878, 3.29055257674, 0.0]  # [x, y, yaw] Bottom-left corner in meters
+negate: 0  # 0 = white is free, black is occupied
+occupied_thresh: 0.65  # Threshold for obstacle detection (0-1)
+free_thresh: 0.196  # Threshold for free space (0-1)
