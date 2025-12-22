@@ -23,12 +23,12 @@ class ControllerNode(Node):
         self.pub_speed = self.create_publisher(Float32, 'motor_speed', 10)
 
         # PID TUNING
-        self.pid = PID(Kp=6.0, Ki=0.0, Kd=0.2, output_limits=(-20, 20))  # TUNE THESE GANGIES
+        self.pid = PID(Kp=6.0, Ki=0.0, Kd=0.05, output_limits=(-20, 20))  # TUNE THESE GANGIES
 
         self.base_speed = 1.0 # 100% duty max, max speed
 
         # Timer Loop
-        self.timer = self.create_timer(0.1, self.control_loop) # 10 Hz
+        self.timer = self.create_timer(0.02, self.control_loop) # 10 Hz
 
     def offset_callback(self, msg: Float32):
         self.lane_offset_value = msg.data
