@@ -83,12 +83,12 @@ class LaneDetectionAlgorithm:
         if lane_center is not None:
             offset = lane_center - img_center
 
-        steering_angle = np.degrees(steering_angle)
+        steering_angle = np.radians(steering_angle)
 
         if debug:
             self._show_debug_windows(frame, birdeye_edges, vis, steering_angle, lane_center)
 
-        return float(offset), float(steering_angle)
+        return float(offset), float(steering_angle), 0
 
     def _show_debug_windows(self, frame, edges, vis, angle, lane_center):
         """Internal helper for visualization"""
