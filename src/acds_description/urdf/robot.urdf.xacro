@@ -1,0 +1,211 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="acds_robot">
+  
+  <!-- PROPERTIES -->
+  <xacro:property name="wheel_radius" value="0.035"/>
+  <xacro:property name="wheel_width" value="0.025"/>
+  <xacro:property name="wheelbase" value="0.26"/>
+  <xacro:property name="track_width" value="0.18"/>
+  <xacro:property name="chassis_length" value="0.30"/>
+  <xacro:property name="chassis_width" value="0.20"/>
+  <xacro:property name="chassis_height" value="0.10"/>
+  
+  <!-- BASE_FOOTPRINT (Ground projection) -->
+  <link name="base_footprint"/>
+  
+  <!-- BASE_LINK (Main chassis) -->
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+  
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.2 0.2 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.015" ixy="0.0" ixz="0.0" 
+               iyy="0.025" iyz="0.0" izz="0.030"/>
+    </inertial>
+  </link>
+  
+  <!-- REAR LEFT WHEEL -->
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="${-wheelbase/2} ${track_width/2} 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  
+  <link name="rear_left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" 
+               iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  
+  <!-- REAR RIGHT WHEEL -->
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="${-wheelbase/2} ${-track_width/2} 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  
+  <link name="rear_right_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" 
+               iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  
+  <!-- FRONT LEFT WHEEL (Steerable) -->
+  <joint name="front_left_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_left_steer"/>
+    <origin xyz="${wheelbase/2} ${track_width/2} 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-pi/6}" upper="${pi/6}" effort="10" velocity="1.0"/>
+  </joint>
+  
+  <link name="front_left_steer">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.00001" ixy="0.0" ixz="0.0" 
+               iyy="0.00001" iyz="0.0" izz="0.00001"/>
+    </inertial>
+  </link>
+  
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="front_left_steer"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  
+  <link name="front_left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" 
+               iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  
+  <!-- FRONT RIGHT WHEEL (Steerable) -->
+  <joint name="front_right_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_right_steer"/>
+    <origin xyz="${wheelbase/2} ${-track_width/2} 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-pi/6}" upper="${pi/6}" effort="10" velocity="1.0"/>
+  </joint>
+  
+  <link name="front_right_steer">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.00001" ixy="0.0" ixz="0.0" 
+               iyy="0.00001" iyz="0.0" izz="0.00001"/>
+    </inertial>
+  </link>
+  
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="front_right_steer"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  
+  <link name="front_right_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" 
+               iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  
+  <!-- IMU LINK -->
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 ${chassis_height/2 + 0.02}" rpy="0 0 0"/>
+  </joint>
+  
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.02 0.02 0.01"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0.0" ixz="0.0" 
+               iyy="0.000001" iyz="0.0" izz="0.000001"/>
+    </inertial>
+  </link>
+  
+</robot>

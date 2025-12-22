@@ -3,18 +3,19 @@
 <package format="3">
   <name>acds_description</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>URDF description and robot model for ACDS robot</description>
   <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
   <depend>xacro</depend>
+  <depend>robot_state_publisher</depend>
 
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>
