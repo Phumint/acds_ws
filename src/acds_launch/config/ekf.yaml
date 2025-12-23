@@ -66,25 +66,23 @@ ekf_filter_node:
     
     # ===== ODOMETRY INPUT =====
     # Configuration for /odom_raw (wheel odometry)
-    odom0: odom_raw
-    odom0_config: [true,  true,  false,  # x, y, z
-                   false, false, true,   # roll, pitch, yaw
-                   true,  false, false,  # vx, vy, vz
-                   false, false, true,   # vroll, vpitch, vyaw
-                   false, false, false]  # ax, ay, az
-    odom0_queue_size: 10
-    odom0_nodelay: false
+    odom0: /odom_raw  # Ensure this matches your vehicle_driver topic
+    odom0_config: [true,  true,  false,  # X, Y, Z (Trust X/Y position from wheels)
+                  false, false, false,  # Roll, Pitch, Yaw (IGNORE wheel rotation!)
+                  true,  false, false,  # Vx, Vy, Vz (Trust forward speed)
+                  false, false, false,  # Vroll, Vpitch, Vyaw
+                  false, false, false]  # Ax, Ay, Az
     odom0_differential: false
-    odom0_relative: false
+    odom0_queue_size: 10
     
     # ===== IMU INPUT =====
     # Configuration for /imu/data (MPU6050)
     imu0: imu/data
-    imu0_config: [false, false, false,   # Indices 0-2: x, y, z position
-                  false, false, false,   # Indices 3-5: roll, pitch, yaw orientation  
-                  false, false, false,   # Indices 6-8: vx, vy, vz linear velocity
-                  false, false, true,    # Indices 9-11: vroll, vpitch, vyaw ← TRUE HERE!
-                  false, false, false]   # Indices 12-14: ax, ay, az ← ALL FALSE!
+    imu0_config: [false, false, false,   # X, Y, Z
+              false, false, false,   # Roll, Pitch, Yaw (No magnetometer, so we can't trust absolute yaw)
+              false, false, false,   # Vx, Vy, Vz
+              false, false, true,    # Vroll, Vpitch, Vyaw (YES! Trust Gyro Z)
+              false, false, false]   # Ax, Ay, Az (NO! Your X bias is too high)
 
     imu0_nodelay: false
     imu0_differential: false
