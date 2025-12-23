@@ -3,12 +3,15 @@
 <package format="3">
   <name>acds_launch</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Launch files for ACDS autonomous robot</description>
   <maintainer email="phumint1969@gmail.com">rppi4</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
   <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>nav2_bringup</depend>
+  <depend>robot_localization</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

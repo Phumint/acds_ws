@@ -33,17 +33,18 @@ class VehicleDriverNode(Node):
         self.MIN_US = 1000
         self.MAX_US = 2000
         
-        # Encoder Pins (UPDATE THESE TO YOUR ACTUAL PINS!)
-        self.ENCODER_LEFT_PIN = 17   # Left wheel encoder
-        self.ENCODER_RIGHT_PIN = 27  # Right wheel encoder
+        # Quadrature Encoder Pins (UPDATE THESE TO YOUR ACTUAL PINS!)
+        # Single encoder for rear motor (drives both rear wheels)
+        self.ENCODER_A = 17   # Rear motor encoder Phase A
+        self.ENCODER_B = 27   # Rear motor encoder Phase B
         
         # ========== VEHICLE PARAMETERS ==========
-        self.declare_parameter('wheel_base', 0.26)  # Distance between front and rear axles (m)
-        self.declare_parameter('wheel_radius', 0.035)  # Wheel radius (m)
-        self.declare_parameter('max_steering_angle', 20.0)  # Max steering angle (degrees)
+        self.declare_parameter('wheel_base', 0.135)  # Distance between front and rear axles (m)
+        self.declare_parameter('wheel_radius', 0.033)  # Wheel radius (m)
+        self.declare_parameter('max_steering_angle', 35.0)  # Max steering angle (degrees)
         self.declare_parameter('max_speed', 1.0)  # Max linear speed (m/s)
-        self.declare_parameter('encoder_ticks_per_rev', 20)  # Encoder resolution
-        self.declare_parameter('speed_scaling', 0.3)  # Motor power scaling factor
+        self.declare_parameter('encoder_ticks_per_rev', 488)  # 977, Encoder resolution
+        self.declare_parameter('speed_scaling', 0.9)  # Motor power scaling factor
         
         self.wheel_base = self.get_parameter('wheel_base').value
         self.wheel_radius = self.get_parameter('wheel_radius').value
@@ -57,9 +58,12 @@ class VehicleDriverNode(Node):
         self.y = 0.0
         self.theta = 0.0
         self.last_time = self.get_clock().now()
-        self.left_ticks = 0
-        self.right_ticks = 0
+        self.rear_ticks = 0  # Single encoder for rear motor
         self.odom_lock = Lock()
+        
+        # Quadrature encoder state tracking
+        self.last_a = 0
+        self.last_b = 0
         
         # ========== GPIO INITIALIZATION ==========
         self.pi = pigpio.pi()
@@ -81,15 +85,19 @@ class VehicleDriverNode(Node):
         self.pi.set_mode(self.SERVO_PIN, pigpio.OUTPUT)
         self.pi.set_servo_pulsewidth(self.SERVO_PIN, self.NEUTRAL_US)
         
-        # Encoder setup
-        self.pi.set_mode(self.ENCODER_LEFT_PIN, pigpio.INPUT)
-        self.pi.set_mode(self.ENCODER_RIGHT_PIN, pigpio.INPUT)
-        self.pi.set_pull_up_down(self.ENCODER_LEFT_PIN, pigpio.PUD_UP)
-        self.pi.set_pull_up_down(self.ENCODER_RIGHT_PIN, pigpio.PUD_UP)
+        # Encoder setup (single rear encoder)
+        self.pi.set_mode(self.ENCODER_A, pigpio.INPUT)
+        self.pi.set_mode(self.ENCODER_B, pigpio.INPUT)
         
-        # Encoder callbacks
-        self.pi.callback(self.ENCODER_LEFT_PIN, pigpio.RISING_EDGE, self._left_encoder_callback)
-        self.pi.callback(self.ENCODER_RIGHT_PIN, pigpio.RISING_EDGE, self._right_encoder_callback)
+        self.pi.set_pull_up_down(self.ENCODER_A, pigpio.PUD_UP)
+        self.pi.set_pull_up_down(self.ENCODER_B, pigpio.PUD_UP)
+        
+        # Initialize encoder states
+        self.last_a = self.pi.read(self.ENCODER_A)
+        self.last_b = self.pi.read(self.ENCODER_B)
+        
+        # Quadrature encoder callback (trigger on both edges of Phase A)
+        self.pi.callback(self.ENCODER_A, pigpio.EITHER_EDGE, self._encoder_callback)
         
         # ========== ROS SETUP ==========
         self.cmd_vel_sub = self.create_subscription(
@@ -103,15 +111,29 @@ class VehicleDriverNode(Node):
         
         self.get_logger().info(f"Vehicle Driver initialized - Wheelbase: {self.wheel_base}m, Max Steering: {math.degrees(self.max_steering_angle)}°")
 
-    def _left_encoder_callback(self, gpio, level, tick):
-        """Interrupt callback for left encoder"""
+    def _encoder_callback(self, gpio, level, tick):
+        """
+        Quadrature encoder callback for rear motor
+        Determines direction based on phase relationship between A and B
+        Single encoder tracks both rear wheels (they're mechanically linked)
+        """
+        # Read current states
+        a_state = self.pi.read(self.ENCODER_A)
+        b_state = self.pi.read(self.ENCODER_B)
+        
+        # Determine direction using quadrature encoding
+        # Forward:  A leads B
+        # Backward: B leads A
+        
         with self.odom_lock:
-            self.left_ticks += 1
-    
-    def _right_encoder_callback(self, gpio, level, tick):
-        """Interrupt callback for right encoder"""
-        with self.odom_lock:
-            self.right_ticks += 1
+            if a_state == self.last_b:
+                self.rear_ticks += 1  # Forward
+            else:
+                self.rear_ticks -= 1  # Backward
+            
+            # Update last states
+            self.last_a = a_state
+            self.last_b = b_state
 
     def cmd_vel_callback(self, msg: Twist):
         """
@@ -161,6 +183,7 @@ class VehicleDriverNode(Node):
     def publish_odometry(self):
         """
         Calculate and publish odometry from encoder ticks
+        Note: Single encoder on rear motor, so left/right distances are equal
         """
         current_time = self.get_clock().now()
         dt = (current_time - self.last_time).nanoseconds / 1e9
@@ -169,33 +192,31 @@ class VehicleDriverNode(Node):
             return
         
         with self.odom_lock:
-            left_ticks = self.left_ticks
-            right_ticks = self.right_ticks
-            self.left_ticks = 0
-            self.right_ticks = 0
+            rear_ticks = self.rear_ticks
+            self.rear_ticks = 0
         
-        # Convert ticks to distance
+        # Convert ticks to distance (direction already encoded in tick count)
         meters_per_tick = (2.0 * math.pi * self.wheel_radius) / self.encoder_ticks
-        left_distance = left_ticks * meters_per_tick
-        right_distance = right_ticks * meters_per_tick
+        distance = rear_ticks * meters_per_tick
         
-        # Average distance (assuming differential drive approximation)
-        distance = (left_distance + right_distance) / 2.0
+        # For Ackermann steering with single rear motor:
+        # Both rear wheels travel the same distance (no differential)
+        # Steering is done by front wheels only
         
-        # Update pose (simplified 2D kinematics)
-        # For Ackermann, this is an approximation - proper implementation needs steering angle
-        delta_theta = (right_distance - left_distance) / self.wheel_base  # Approximation
+        # Update pose (simplified - assumes small time steps)
+        # Delta heading comes from steering angle (not from encoder difference)
+        # For now, we track straight-line motion only
+        # Full Ackermann kinematics would use steering angle feedback
         
-        self.x += distance * math.cos(self.theta + delta_theta / 2.0)
-        self.y += distance * math.sin(self.theta + delta_theta / 2.0)
-        self.theta += delta_theta
-        
-        # Normalize theta
-        self.theta = math.atan2(math.sin(self.theta), math.cos(self.theta))
+        self.x += distance * math.cos(self.theta)
+        self.y += distance * math.sin(self.theta)
+        # Note: theta (heading) changes are not tracked by encoders alone
+        # You'd need IMU or steering angle sensor for accurate theta
         
         # Velocities
-        vx = distance / dt
-        vth = delta_theta / dt
+        vx = distance / dt if dt > 0 else 0.0
+        vth = 0.0  # Cannot determine from single rear encoder
+        # IMU will provide angular velocity in sensor fusion
         
         # ========== PUBLISH ODOMETRY MESSAGE ==========
         odom = Odometry()

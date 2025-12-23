@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='rppi4',
     maintainer_email='phumint1969@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Hardware drivers for ACDS robot actuation and sensors',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
@@ -26,6 +26,8 @@ setup(
         'console_scripts': [
             'motor_driver_node = acds_actuation.motor_driver_node:main',
             'steering_driver_node = acds_actuation.steering_driver_node:main',
+            'vehicle_driver_node = acds_actuation.vehicle_driver_node:main',
+            'imu_node = acds_actuation.imu_node:main',
         ],
     },
 )
