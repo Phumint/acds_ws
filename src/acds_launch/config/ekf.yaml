@@ -80,13 +80,11 @@ ekf_filter_node:
     # ===== IMU INPUT =====
     # Configuration for /imu/data (MPU6050)
     imu0: imu/data
-    imu0_config: [false, false, false,  # x, y, z (no position)
-                  false, false, false,  # roll, pitch (no orientation)
-                  false,                # yaw (no orientation - no magnetometer)
-                  false, false, false,  # vx, vy, vz (no velocity)
-                  false, false, true,   # vroll, vpitch, vyaw ← ONLY USE GYRO Z!
-                  false, false, false]  # ax, ay, az ← DISABLE ACCELEROMETER!
-                  # ^^^^ CHANGE THESE FROM true TO false
+    imu0_config: [false, false, false,   # Indices 0-2: x, y, z position
+                  false, false, false,   # Indices 3-5: roll, pitch, yaw orientation  
+                  false, false, false,   # Indices 6-8: vx, vy, vz linear velocity
+                  false, false, true,    # Indices 9-11: vroll, vpitch, vyaw ← TRUE HERE!
+                  false, false, false]   # Indices 12-14: ax, ay, az ← ALL FALSE!
 
     imu0_nodelay: false
     imu0_differential: false

@@ -40,11 +40,11 @@ class VehicleDriverNode(Node):
         
         # ========== VEHICLE PARAMETERS ==========
         self.declare_parameter('wheel_base', 0.135)  # Distance between front and rear axles (m)
-        self.declare_parameter('wheel_radius', 0.033)  # Wheel radius (m)
+        self.declare_parameter('wheel_radius', 0.0325)  # Wheel radius (m)
         self.declare_parameter('max_steering_angle', 35.0)  # Max steering angle (degrees)
         self.declare_parameter('max_speed', 1.0)  # Max linear speed (m/s)
-        self.declare_parameter('encoder_ticks_per_rev', 239)  # 977, Encoder resolution
-        self.declare_parameter('speed_scaling', 0.9)  # Motor power scaling factor
+        self.declare_parameter('encoder_ticks_per_rev', 111)  # 977, Encoder resolution
+        self.declare_parameter('speed_scaling', 1.0)  # Motor power scaling factor
         
         self.wheel_base = self.get_parameter('wheel_base').value
         self.wheel_radius = self.get_parameter('wheel_radius').value
@@ -127,9 +127,9 @@ class VehicleDriverNode(Node):
         
         with self.odom_lock:
             if a_state == self.last_b:
-                self.rear_ticks -= 1  # Forward
+                self.rear_ticks += 1  # Forward
             else:
-                self.rear_ticks += 1  # Backward
+                self.rear_ticks -= 1  # Backward
             
             # Update last states
             self.last_a = a_state
@@ -248,17 +248,17 @@ class VehicleDriverNode(Node):
         
         self.odom_pub.publish(odom)
         
-        # ========== PUBLISH TF ==========
-        t = TransformStamped()
-        t.header.stamp = current_time.to_msg()
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
-        t.transform.translation.x = self.x
-        t.transform.translation.y = self.y
-        t.transform.translation.z = 0.0
-        t.transform.rotation = odom.pose.pose.orientation
+        # # ========== PUBLISH TF ==========
+        # t = TransformStamped()
+        # t.header.stamp = current_time.to_msg()
+        # t.header.frame_id = 'odom'
+        # t.child_frame_id = 'base_link'
+        # t.transform.translation.x = self.x
+        # t.transform.translation.y = self.y
+        # t.transform.translation.z = 0.0
+        # t.transform.rotation = odom.pose.pose.orientation
         
-        self.tf_broadcaster.sendTransform(t)
+        # self.tf_broadcaster.sendTransform(t)
         
         self.last_time = current_time
 
