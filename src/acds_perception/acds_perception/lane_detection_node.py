@@ -153,7 +153,7 @@ class LaneDetectionAlgorithm:
 class LaneDetectionNode(Node):
     def __init__(self):
         super().__init__('lane_detection_node')
-
+        
         self.pub_offset = self.create_publisher(Float32, 'lane_offset', 10)
         self.pub_heading = self.create_publisher(Float32, 'lane_heading', 10)
 

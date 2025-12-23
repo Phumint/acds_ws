@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'lane_detection_node = acds_perception.lane_detection_node:main',
             'traffic_detection = acds_perception.traffic_sign_node:main',
+            'integrated_perception_node = acds_perception.integrated_perception_node:main',
         ],
     },
 )

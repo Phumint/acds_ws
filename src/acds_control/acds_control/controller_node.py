@@ -25,7 +25,7 @@ class ControllerNode(Node):
         # Kd=0.5 adds a "brake" to the steering so it doesn't oscillate.
         self.pid = PID(Kp=0.8, Ki=0.0, Kd=0.5, output_limits=(-30, 30)) 
 
-        self.base_speed = 0.7
+        self.base_speed = 0.4
         self.img_width = 640.0 
 
         # Timer Loop (20Hz is good for responsiveness)
