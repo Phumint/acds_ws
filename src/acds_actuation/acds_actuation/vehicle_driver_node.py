@@ -43,7 +43,7 @@ class VehicleDriverNode(Node):
         self.declare_parameter('wheel_radius', 0.0325)  # Wheel radius (m)
         self.declare_parameter('max_steering_angle', 35.0)  # Max steering angle (degrees)
         self.declare_parameter('max_speed', 1.0)  # Max linear speed (m/s)
-        self.declare_parameter('encoder_ticks_per_rev', 111)  # 977, Encoder resolution
+        self.declare_parameter('encoder_ticks_per_rev', 469)  # 977, Encoder resolution
         self.declare_parameter('speed_scaling', 1.0)  # Motor power scaling factor
         
         self.wheel_base = self.get_parameter('wheel_base').value
