@@ -163,7 +163,7 @@ def main(args=None):
     
     try:
         # Optionally calibrate on startup
-        # node.calibrate_gyro()
+        node.calibrate_gyro()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

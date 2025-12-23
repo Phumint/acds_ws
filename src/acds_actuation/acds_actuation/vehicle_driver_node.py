@@ -127,9 +127,9 @@ class VehicleDriverNode(Node):
         
         with self.odom_lock:
             if a_state == self.last_b:
-                self.rear_ticks += 1  # Forward
+                self.rear_ticks -= 1  # Forward
             else:
-                self.rear_ticks -= 1  # Backward
+                self.rear_ticks += 1  # Backward
             
             # Update last states
             self.last_a = a_state
