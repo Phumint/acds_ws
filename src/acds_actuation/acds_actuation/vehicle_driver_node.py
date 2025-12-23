@@ -92,9 +92,14 @@ class VehicleDriverNode(Node):
         self.pi.set_pull_up_down(self.ENCODER_A, pigpio.PUD_UP)
         self.pi.set_pull_up_down(self.ENCODER_B, pigpio.PUD_UP)
         
-        # Initialize encoder states
-        self.last_a = self.pi.read(self.ENCODER_A)
-        self.last_b = self.pi.read(self.ENCODER_B)
+        # Initialize encoder states (Read once at startup)
+        self.levA = self.pi.read(self.ENCODER_A)
+        self.levB = self.pi.read(self.ENCODER_B)
+
+        # Monitor BOTH pins. We need B's transition to update 'self.levB' 
+        # so that when A fires, we have the accurate state of B.
+        self.cbA = self.pi.callback(self.ENCODER_A, pigpio.EITHER_EDGE, self._encoder_callback)
+        self.cbB = self.pi.callback(self.ENCODER_B, pigpio.EITHER_EDGE, self._encoder_callback)
         
         # Quadrature encoder callback (trigger on both edges of Phase A)
         self.pi.callback(self.ENCODER_A, pigpio.EITHER_EDGE, self._encoder_callback)
@@ -113,27 +118,30 @@ class VehicleDriverNode(Node):
 
     def _encoder_callback(self, gpio, level, tick):
         """
-        Quadrature encoder callback for rear motor
-        Determines direction based on phase relationship between A and B
-        Single encoder tracks both rear wheels (they're mechanically linked)
+        Stateless Quadrature Logic using Double-Tracking.
+        We track B via callback to ensure we have its state 
+        synchronous with the event stream, not the physical "now".
         """
-        # Read current states
-        a_state = self.pi.read(self.ENCODER_A)
-        b_state = self.pi.read(self.ENCODER_B)
-        
-        # Determine direction using quadrature encoding
-        # Forward:  A leads B
-        # Backward: B leads A
+        if level > 1: return # Ignore timeouts
+
+        # 1. Update the stored state variables
+        if gpio == self.ENCODER_A:
+            self.levA = level
+        else:
+            self.levB = level
+            return # If B changed, we just update state and exit. No tick counting.
+
+        # 2. Logic: We only count ticks when A changes (Matches your old resolution)
+        # We compare A's *new* level with B's *stored* level.
         
         with self.odom_lock:
-            if a_state == self.last_b:
-                self.rear_ticks += 1  # Forward
-            else:
-                self.rear_ticks -= 1  # Backward
-            
-            # Update last states
-            self.last_a = a_state
-            self.last_b = b_state
+            if gpio == self.ENCODER_A:
+                # If A matches B, we are going one way. 
+                # If different, the other way.
+                if self.levA == self.levB:
+                    self.rear_ticks -= 1
+                else:
+                    self.rear_ticks += 1
 
     def cmd_vel_callback(self, msg: Twist):
         """
