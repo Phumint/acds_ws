@@ -10,12 +10,12 @@ class SmartGoToZone(Node):
         super().__init__('smart_goto_zone')
         
         # --- CONFIGURATION ---
-        self.goal_x = 1.0
-        self.goal_y = 0.0
-        self.goal_tolerance = 0.15 
+        # Try changing this to 0.0, 0.0 to test the fix
+        self.goal_x = -2.0
+        self.goal_y = 2.0
+        self.goal_tolerance = 0.16
         
         # --- SAFETY ZONE (GEOFENCE) ---
-        # 3 meter square centered at 0,0 means +/- 1.5 meters on each axis.
         self.zone_limit = 3.0 
         
         # --- TUNING ---
@@ -24,19 +24,22 @@ class SmartGoToZone(Node):
         self.corner_boost_gain = 0.20
         self.steer_gain = 1.2
         
-        # --- GEAR SHIFTING LOGIC ---
+        # --- STATE ---
         self.direction = 1  # 1 = Forward, -1 = Reverse
         self.curr_x = 0.0
         self.curr_y = 0.0
         self.curr_yaw = 0.0
         self.running = True
+        
+        # FIX: Flag to ensure we have real data before starting
+        self.odom_received = False 
 
         self.odom_sub = self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.timer = self.create_timer(0.1, self.control_loop)
         
         self.get_logger().info(f"Navigating to Goal: [{self.goal_x}, {self.goal_y}]")
-        self.get_logger().info(f"Safety Zone Active: +/- {self.zone_limit}m")
+        self.get_logger().info("Waiting for valid Odometry data...")
 
     def odom_callback(self, msg):
         self.curr_x = msg.pose.pose.position.x
@@ -45,6 +48,9 @@ class SmartGoToZone(Node):
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.curr_yaw = math.atan2(siny_cosp, cosy_cosp)
+        
+        # FIX: We now know where we are
+        self.odom_received = True
 
     def normalize_angle(self, angle):
         while angle > math.pi: angle -= 2 * math.pi
@@ -52,21 +58,26 @@ class SmartGoToZone(Node):
         return angle
 
     def stop_robot(self):
-        self.cmd_pub.publish(Twist())
+        """Publishes 0 velocity. Handles errors gracefully if ROS is shutting down."""
+        try:
+            self.cmd_pub.publish(Twist())
+        except Exception:
+            pass
 
     def control_loop(self):
         if not self.running: return
 
-        # --- 1. GEOFENCE CHECK (CRITICAL SAFETY) ---
-        # If we are outside the 3m square (±1.5m from 0,0), STOP immediately.
+        # FIX: Do not run logic until we know where the robot is!
+        if not self.odom_received:
+            self.get_logger().info("Waiting for odometry...", throttle_duration_sec=2.0)
+            return
+
+        # --- 1. GEOFENCE CHECK ---
         if abs(self.curr_x) > self.zone_limit or abs(self.curr_y) > self.zone_limit:
             self.stop_robot()
             self.get_logger().error(
                 f"🚨 ZONE BREACH! Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}] is outside limit {self.zone_limit}m"
             )
-            # We do NOT set self.running = False here, so if you push it back in, it resumes.
-            # If you want it to die permanently, uncomment the next line:
-            # self.running = False 
             return
 
         # --- 2. Physics Calculations ---
@@ -75,7 +86,6 @@ class SmartGoToZone(Node):
         dist = math.sqrt(dx**2 + dy**2)
         angle_to_goal = math.atan2(dy, dx)
         
-        # Calculate error relative to the FRONT of the robot
         heading_error_front = self.normalize_angle(angle_to_goal - self.curr_yaw)
 
         # --- 3. Check Goal Reached ---
@@ -86,19 +96,16 @@ class SmartGoToZone(Node):
             return
 
         # --- 4. GEAR SHIFTING LOGIC ---
-        # Check if the goal is "Behind" us (> 100 degrees or < -100 degrees)
         is_behind = abs(heading_error_front) > (math.pi / 2 + 0.2)
         is_in_front = abs(heading_error_front) < (math.pi / 2 - 0.2)
 
         target_direction = self.direction
 
-        # Hysteresis Switch
         if self.direction == 1 and is_behind:
-            target_direction = -1 # Reverse
+            target_direction = -1 
         elif self.direction == -1 and is_in_front:
-            target_direction = 1  # Forward
+            target_direction = 1 
 
-        # Safety Stop before switching
         if target_direction != self.direction:
             self.stop_robot()
             self.direction = target_direction
@@ -110,14 +117,12 @@ class SmartGoToZone(Node):
         if self.direction == 1:
             steering_error = heading_error_front
         else:
-            # When reversing, steer based on the REAR (yaw + pi)
             steering_error = self.normalize_angle(angle_to_goal - (self.curr_yaw + math.pi))
 
         # --- 6. Speed & Boost Calculation ---
         msg = Twist()
         msg.angular.z = steering_error * self.steer_gain
 
-        # Base Speed (Distance based)
         if dist < 1.0:
             target_speed = self.max_speed * (dist / 1.0)
         else:
@@ -125,18 +130,15 @@ class SmartGoToZone(Node):
         
         target_speed = max(target_speed, self.min_speed)
 
-        # Cornering Boost (Add power on turns)
         turn_intensity = min(abs(steering_error), 1.0)
         boost = turn_intensity * self.corner_boost_gain
         
         final_speed = target_speed + boost
-        
-        # Apply Direction
         msg.linear.x = final_speed * self.direction
         
         self.cmd_pub.publish(msg)
 
-        # --- 7. DEBUG OUTPUT (RESTORED) ---
+        # --- 7. DEBUG OUTPUT ---
         gear_str = "FWD" if self.direction == 1 else "REV"
         self.get_logger().info(
             f"Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}] | "
@@ -152,14 +154,20 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info("Stopping...")
     finally:
-        node.stop_robot()
-        time.sleep(0.2)
-        node.stop_robot()
+        if rclpy.ok():
+            try:
+                node.stop_robot()
+                time.sleep(0.1)
+            except Exception:
+                pass
         node.destroy_node()
-        if rclpy.ok(): rclpy.shutdown()
-        print("Robot stopped safely.")
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception:
+            pass
 
 if __name__ == '__main__':
     main()
