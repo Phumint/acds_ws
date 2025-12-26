@@ -5,135 +5,161 @@ from nav_msgs.msg import Odometry
 import math
 import time
 
-class SimpleGoToGoal(Node):
+class SmartGoToZone(Node):
     def __init__(self):
-        super().__init__('simple_goto')
+        super().__init__('smart_goto_zone')
         
         # --- CONFIGURATION ---
-        self.goal_x = 0.0
-        self.goal_y = -1.0
-        self.goal_tolerance = 0.30 
+        self.goal_x = 1.0
+        self.goal_y = 0.0
+        self.goal_tolerance = 0.15 
         
-        # --- TUNING PARAMETERS ---
-        self.max_speed = 0.25       # Cruise speed (m/s)
-        self.min_speed = 0.12       # Floor speed (prevent stalling when going straight)
+        # --- SAFETY ZONE (GEOFENCE) ---
+        # 3 meter square centered at 0,0 means +/- 1.5 meters on each axis.
+        self.zone_limit = 3.0 
         
-        # CORNERING BOOST (The Fix)
-        # Adds extra speed when turning to overcome friction.
-        # Formula: speed += abs(heading_error) * corner_boost_gain
-        # Example: If error is 1.0 rad (~57 deg) and gain is 0.1, adds 0.1 m/s to speed.
-        self.corner_boost_gain = 0.15 
+        # --- TUNING ---
+        self.max_speed = 0.25
+        self.min_speed = 0.12
+        self.corner_boost_gain = 0.20
+        self.steer_gain = 1.2
         
-        self.steer_gain = 1.2       # Steering aggression
-        self.look_ahead_dist = 1.0  # Distance to start slowing down
-        
-        # State
+        # --- GEAR SHIFTING LOGIC ---
+        self.direction = 1  # 1 = Forward, -1 = Reverse
         self.curr_x = 0.0
         self.curr_y = 0.0
         self.curr_yaw = 0.0
         self.running = True
 
-        # Communication
         self.odom_sub = self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.timer = self.create_timer(0.1, self.control_loop)
         
         self.get_logger().info(f"Navigating to Goal: [{self.goal_x}, {self.goal_y}]")
+        self.get_logger().info(f"Safety Zone Active: +/- {self.zone_limit}m")
 
     def odom_callback(self, msg):
         self.curr_x = msg.pose.pose.position.x
         self.curr_y = msg.pose.pose.position.y
-        
         q = msg.pose.pose.orientation
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.curr_yaw = math.atan2(siny_cosp, cosy_cosp)
 
-    def get_heading_error(self, target_angle):
-        error = target_angle - self.curr_yaw
-        while error > math.pi: error -= 2 * math.pi
-        while error < -math.pi: error += 2 * math.pi
-        return error
+    def normalize_angle(self, angle):
+        while angle > math.pi: angle -= 2 * math.pi
+        while angle < -math.pi: angle += 2 * math.pi
+        return angle
 
     def stop_robot(self):
-        stop_msg = Twist()
-        stop_msg.linear.x = 0.0
-        stop_msg.angular.z = 0.0
-        self.cmd_pub.publish(stop_msg)
+        self.cmd_pub.publish(Twist())
 
     def control_loop(self):
-        if not self.running:
+        if not self.running: return
+
+        # --- 1. GEOFENCE CHECK (CRITICAL SAFETY) ---
+        # If we are outside the 3m square (±1.5m from 0,0), STOP immediately.
+        if abs(self.curr_x) > self.zone_limit or abs(self.curr_y) > self.zone_limit:
+            self.stop_robot()
+            self.get_logger().error(
+                f"🚨 ZONE BREACH! Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}] is outside limit {self.zone_limit}m"
+            )
+            # We do NOT set self.running = False here, so if you push it back in, it resumes.
+            # If you want it to die permanently, uncomment the next line:
+            # self.running = False 
             return
 
-        # 1. Calculate Distance & Angle
-        dist = math.sqrt((self.goal_x - self.curr_x)**2 + (self.goal_y - self.curr_y)**2)
-        angle_to_goal = math.atan2(self.goal_y - self.curr_y, self.goal_x - self.curr_x)
-        heading_error = self.get_heading_error(angle_to_goal)
+        # --- 2. Physics Calculations ---
+        dx = self.goal_x - self.curr_x
+        dy = self.goal_y - self.curr_y
+        dist = math.sqrt(dx**2 + dy**2)
+        angle_to_goal = math.atan2(dy, dx)
+        
+        # Calculate error relative to the FRONT of the robot
+        heading_error_front = self.normalize_angle(angle_to_goal - self.curr_yaw)
 
-        # 2. Check Goal Reached
+        # --- 3. Check Goal Reached ---
         if dist < self.goal_tolerance:
             self.stop_robot()
-            self.get_logger().info(f"GOAL REACHED! Final Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}]")
+            self.get_logger().info(f"🏆 GOAL REACHED! Final Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}]")
             self.running = False
             return
 
-        msg = Twist()
+        # --- 4. GEAR SHIFTING LOGIC ---
+        # Check if the goal is "Behind" us (> 100 degrees or < -100 degrees)
+        is_behind = abs(heading_error_front) > (math.pi / 2 + 0.2)
+        is_in_front = abs(heading_error_front) < (math.pi / 2 - 0.2)
 
-        # 3. Steering Command
-        steer_cmd = heading_error * self.steer_gain
-        msg.angular.z = steer_cmd
+        target_direction = self.direction
 
-        # 4. Speed Calculation with Cornering Boost
-        
-        # A. Base Speed (Distance based)
-        # Slow down as we approach the goal
-        if dist < self.look_ahead_dist:
-            base_speed = self.max_speed * (dist / self.look_ahead_dist)
+        # Hysteresis Switch
+        if self.direction == 1 and is_behind:
+            target_direction = -1 # Reverse
+        elif self.direction == -1 and is_in_front:
+            target_direction = 1  # Forward
+
+        # Safety Stop before switching
+        if target_direction != self.direction:
+            self.stop_robot()
+            self.direction = target_direction
+            self.get_logger().warn(f"⚙️ Shifting Gear to {'REVERSE' if self.direction == -1 else 'FORWARD'}")
+            time.sleep(0.5) 
+            return 
+
+        # --- 5. Steering Calculation ---
+        if self.direction == 1:
+            steering_error = heading_error_front
         else:
-            base_speed = self.max_speed
+            # When reversing, steer based on the REAR (yaw + pi)
+            steering_error = self.normalize_angle(angle_to_goal - (self.curr_yaw + math.pi))
 
-        # B. Apply Floor (Minimum speed)
-        base_speed = max(base_speed, self.min_speed)
+        # --- 6. Speed & Boost Calculation ---
+        msg = Twist()
+        msg.angular.z = steering_error * self.steer_gain
 
-        # C. Calculate Cornering Boost
-        # The sharper the turn (heading_error), the more speed we add.
-        # We cap the error at 1.0 radian (~57 deg) so we don't boost infinitely on crazy errors.
-        turn_intensity = min(abs(heading_error), 1.0)
+        # Base Speed (Distance based)
+        if dist < 1.0:
+            target_speed = self.max_speed * (dist / 1.0)
+        else:
+            target_speed = self.max_speed
+        
+        target_speed = max(target_speed, self.min_speed)
+
+        # Cornering Boost (Add power on turns)
+        turn_intensity = min(abs(steering_error), 1.0)
         boost = turn_intensity * self.corner_boost_gain
         
-        # D. Final Speed Sum
-        final_speed = base_speed + boost
+        final_speed = target_speed + boost
         
-        # Safety cap (optional, to prevent running too wild)
-        final_speed = min(final_speed, self.max_speed + 0.2) 
-
-        msg.linear.x = final_speed
+        # Apply Direction
+        msg.linear.x = final_speed * self.direction
+        
         self.cmd_pub.publish(msg)
 
-        # --- DEBUG OUTPUT ---
+        # --- 7. DEBUG OUTPUT (RESTORED) ---
+        gear_str = "FWD" if self.direction == 1 else "REV"
         self.get_logger().info(
             f"Pos: [{self.curr_x:.2f}, {self.curr_y:.2f}] | "
             f"Goal: [{self.goal_x:.2f}, {self.goal_y:.2f}] | "
-            f"Err: {heading_error:.2f} | "
-            f"BaseSpd: {base_speed:.2f} + Boost: {boost:.2f} = {final_speed:.2f}"
+            f"[{gear_str}] Dist: {dist:.2f}m | "
+            f"Err: {heading_error_front:.2f} | "
+            f"Speed: {msg.linear.x:.2f}"
         )
 
 def main(args=None):
     rclpy.init(args=args)
-    node = SimpleGoToGoal()
-
+    node = SmartGoToZone()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Stopping...")
+        pass
     finally:
         node.stop_robot()
-        time.sleep(0.1)
+        time.sleep(0.2)
         node.stop_robot()
-        time.sleep(0.1)
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        if rclpy.ok(): rclpy.shutdown()
+        print("Robot stopped safely.")
 
 if __name__ == '__main__':
     main()
