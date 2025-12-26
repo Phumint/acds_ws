@@ -110,7 +110,7 @@ class VehicleDriverNode(Node):
 
         # 3. Drive Servo
         angle_deg = math.degrees(steering_angle)
-        pulse = self.NEUTRAL_US + (angle_deg / math.degrees(self.max_steering_angle)) * (self.MAX_US - self.NEUTRAL_US)
+        pulse = self.NEUTRAL_US - (angle_deg / math.degrees(self.max_steering_angle)) * (self.MAX_US - self.NEUTRAL_US)
         self.pi.set_servo_pulsewidth(self.SERVO_PIN, int(pulse))
 
     def publish_odometry(self):

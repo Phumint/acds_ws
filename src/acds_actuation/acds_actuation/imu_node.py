@@ -28,7 +28,7 @@ class IMUNode(Node):
         
         # Parameters
         self.declare_parameter('i2c_bus', 1)
-        self.declare_parameter('publish_rate', 50.0)  # Hz
+        self.declare_parameter('publish_rate', 20.0)  # Hz
         self.declare_parameter('frame_id', 'imu_link')
         
         self.i2c_bus = self.get_parameter('i2c_bus').value
